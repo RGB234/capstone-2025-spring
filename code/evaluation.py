@@ -73,7 +73,7 @@ k_values = [10, 100]
 ## Raw model
 
 raw_name = "BAAI/bge-m3"
-finetuned_path = "/data2/local_datasets/bge-m3/finetuned_bge-m3"
+finetuned_path = "/data2/local_datasets/bge-m3/ft_bge-m3"
 
 raw_model = FlagModel(
     raw_name,
@@ -86,6 +86,8 @@ results = search(raw_model, queries_text, corpus_text)
 
 eval_res = evaluate_metrics(qrels_dict, results, k_values)
 mrr = evaluate_mrr(qrels_dict, results, k_values)
+
+print("## Raw model ##")
 
 for res in eval_res:
     print(res)
@@ -104,6 +106,8 @@ results = search(ft_model, queries_text, corpus_text)
 
 eval_res = evaluate_metrics(qrels_dict, results, k_values)
 mrr = evaluate_mrr(qrels_dict, results, k_values)
+
+print("## Fine-tuning model ##")
 
 for res in eval_res:
     print(res)

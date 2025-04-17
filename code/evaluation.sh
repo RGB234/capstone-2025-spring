@@ -8,10 +8,6 @@
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
 
-pwd
-
 python evaluation.py
 
 destroy_process_group()
-
-exit 0
