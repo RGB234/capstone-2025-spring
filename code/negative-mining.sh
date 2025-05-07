@@ -14,10 +14,10 @@ hostname
 
 python hn_mine.py \
 --embedder_name_or_path BAAI/bge-m3 \
---input_file /data2/local_datasets/bge-m3/ft_data/ft_data.jsonl \
---output_file /data2/local_datasets/bge-m3/ft_data/ft_data_minedHN.jsonl \
---range_for_sampling 2-200 \
---negative_number 15 \
+--input_file /data2/local_datasets/bge-m3/ft_data/relevant_incidents.jsonl \
+--output_file /data2/local_datasets/bge-m3/ft_data/relevant_incidents_minedHN.jsonl \
+--range_for_sampling 2-300 \
+--negative_number  \
 --use_gpu_for_searching 
 
 exit 0
