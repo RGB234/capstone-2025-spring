@@ -1,9 +1,9 @@
 #!/usr/bin/bash
 #SBATCH -J bge-m3
 #SBATCH --gres=gpu:1
-#SBATCH --cpus-per-gpu=8
+#SBATCH --cpus-per-gpu=6
 #SBATCH --mem-per-gpu=32G
-#SBATCH -w aurora-g3
+#SBATCH -w aurora-g6
 #SBATCH -p batch_ugrad
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
@@ -15,8 +15,8 @@ torchrun --nproc_per_node 1 \
     --model_name_or_path BAAI/bge-m3 \
     --cache_dir /data2/local_datasets/bge-m3/cache/model \
     --cache_path /data2/local_datasets/bge-m3/cache/data \
-    --train_data /data2/local_datasets/bge-m3/ft_data/ft_data_minedHN.jsonl \
-    --output_dir /data2/local_datasets/bge-m3/ft_bge-m3 \
+    --train_data /data2/local_datasets/bge-m3/data/relevant_incidents_train_minedHN.jsonl \
+    --output_dir /data2/local_datasets/bge-m3/ft_model \
     --learning_rate 1e-5 \
     --fp16 \
     --pad_to_multiple_of 8 \
@@ -25,14 +25,10 @@ torchrun --nproc_per_node 1 \
     --dataloader_drop_last True \
     --normalize_embeddings True \
     --temperature 0.02 \
-    --query_max_len 64 \
+    --query_max_len 256 \
     --passage_max_len 256 \
     --train_group_size 2 \
     --negatives_cross_device \
     --logging_steps 10 \
     --save_steps 1000 \
     --query_instruction_for_retrieval ""
-
-destroy_process_group()
-
-exit 0

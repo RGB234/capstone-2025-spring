@@ -3,11 +3,9 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-gpu=8
 #SBATCH --mem-per-gpu=32G
-#SBATCH -w aurora-g3
+#SBATCH -w aurora-g6
 #SBATCH -p batch_ugrad
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
 
 python evaluation.py
-
-destroy_process_group()

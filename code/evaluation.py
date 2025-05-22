@@ -1,11 +1,22 @@
 from datasets import load_dataset
 
+
 ## data loading ##
 
-dataset_dir = "/data2/local_datasets/bge-m3/ft_data"
-queries = load_dataset("json", data_files=f"{dataset_dir}/test_queries.jsonl")["train"]
-corpus = load_dataset("json", data_files=f"{dataset_dir}/test_corpus.jsonl")["train"]
-qrels = load_dataset("json", data_files=f"{dataset_dir}/test_qrels.jsonl")["train"]
+dataset_dir = "/data2/local_datasets/bge-m3/data"
+# queries = load_dataset("json", data_files=f"{dataset_dir}/test_queries.jsonl")["train"]
+# corpus = load_dataset("json", data_files=f"{dataset_dir}/test_corpus.jsonl")["train"]
+# qrels = load_dataset("json", data_files=f"{dataset_dir}/test_qrels.jsonl")["train"]
+
+queries = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_queries.jsonl")[
+    "train"
+]
+corpus = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_corpus.jsonl")[
+    "train"
+]
+qrels = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_qrels.jsonl")[
+    "train"
+]
 
 queries_text = queries["text"]
 corpus_text = [text for sub in corpus["text"] for text in sub]
@@ -70,10 +81,10 @@ from FlagEmbedding import FlagModel
 
 k_values = [10, 100]
 
-## Raw model
-
 raw_name = "BAAI/bge-m3"
-finetuned_path = "/data2/local_datasets/bge-m3/ft_bge-m3"
+finetuned_path = "/data2/local_datasets/bge-m3/ft_model"
+
+## Raw model
 
 raw_model = FlagModel(
     raw_name,
