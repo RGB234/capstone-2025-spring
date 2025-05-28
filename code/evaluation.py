@@ -3,11 +3,14 @@ from datasets import load_dataset
 
 ## data loading ##
 
-dataset_dir = "/data2/local_datasets/bge-m3/data"
+dataset_dir = "/data2/local_datasets/encoder/data"
+
+# GPT-based dataset
 # queries = load_dataset("json", data_files=f"{dataset_dir}/test_queries.jsonl")["train"]
 # corpus = load_dataset("json", data_files=f"{dataset_dir}/test_corpus.jsonl")["train"]
 # qrels = load_dataset("json", data_files=f"{dataset_dir}/test_qrels.jsonl")["train"]
 
+# KLAID
 queries = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_queries.jsonl")[
     "train"
 ]
@@ -81,13 +84,19 @@ from FlagEmbedding import FlagModel
 
 k_values = [10, 100]
 
-raw_name = "BAAI/bge-m3"
-finetuned_path = "/data2/local_datasets/bge-m3/ft_model"
+raw = "/data2/local_datasets/encoder/bgem3"
+ft = "/data2/local_datasets/encoder/bgem3/ft/checkpoint-1815"
 
-## Raw model
+raw_custom = "/data2/local_datasets/encoder/bgem3_custom"
+ft_custom = "/data2/local_datasets/encoder/bgem3_custom/ft/checkpoint-1815"
+
+#### Raw model ####
+
+print("## Raw model ##")
+
 
 raw_model = FlagModel(
-    raw_name,
+    raw,
     # query_instruction_for_retrieval="Represent this sentence for searching relevant passages:",
     devices=[0],
     use_fp16=False,
@@ -98,16 +107,15 @@ results = search(raw_model, queries_text, corpus_text)
 eval_res = evaluate_metrics(qrels_dict, results, k_values)
 mrr = evaluate_mrr(qrels_dict, results, k_values)
 
-print("## Raw model ##")
 
 for res in eval_res:
     print(res)
 print(mrr)
 
-## Fine tuning model
+print("## Fine-tuned Raw model ##")
 
 ft_model = FlagModel(
-    finetuned_path,
+    ft,
     # query_instruction_for_retrieval="Represent this sentence for searching relevant passages:",
     devices=[0],
     use_fp16=False,
@@ -118,7 +126,43 @@ results = search(ft_model, queries_text, corpus_text)
 eval_res = evaluate_metrics(qrels_dict, results, k_values)
 mrr = evaluate_mrr(qrels_dict, results, k_values)
 
-print("## Fine-tuning model ##")
+for res in eval_res:
+    print(res)
+print(mrr)
+
+#### Custom ####
+
+print("## custom model ##")
+
+raw_custom_model = FlagModel(
+    raw_custom,
+    # query_instruction_for_retrieval="Represent this sentence for searching relevant passages:",
+    devices=[0],
+    use_fp16=False,
+)
+
+results = search(raw_custom_model, queries_text, corpus_text)
+
+eval_res = evaluate_metrics(qrels_dict, results, k_values)
+mrr = evaluate_mrr(qrels_dict, results, k_values)
+
+for res in eval_res:
+    print(res)
+print(mrr)
+
+print("## Fine-tuned Custom model ##")
+
+ft_custom_model = FlagModel(
+    ft_custom,
+    # query_instruction_for_retrieval="Represent this sentence for searching relevant passages:",
+    devices=[0],
+    use_fp16=False,
+)
+
+results = search(ft_custom_model, queries_text, corpus_text)
+
+eval_res = evaluate_metrics(qrels_dict, results, k_values)
+mrr = evaluate_mrr(qrels_dict, results, k_values)
 
 for res in eval_res:
     print(res)
