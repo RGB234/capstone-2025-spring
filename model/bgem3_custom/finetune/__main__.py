@@ -1,7 +1,15 @@
 from transformers import HfArgumentParser
 
-from FlagEmbedding.finetune.embedder.encoder_only.m3 import (
-    EncoderOnlyEmbedderM3DataArguments,
+# from FlagEmbedding.finetune.embedder.encoder_only.m3 import (
+#     EncoderOnlyEmbedderM3DataArguments,
+#     EncoderOnlyEmbedderM3TrainingArguments,
+#     EncoderOnlyEmbedderM3ModelArguments,
+#     EncoderOnlyEmbedderM3Runner,
+# )
+
+
+from finetune import (
+    EncoderOnlyEmbedderM3DataArguments,  # FlagEmbedding
     EncoderOnlyEmbedderM3TrainingArguments,
     EncoderOnlyEmbedderM3ModelArguments,
     EncoderOnlyEmbedderM3Runner,

@@ -84,11 +84,13 @@ from FlagEmbedding import FlagModel
 
 k_values = [10, 100]
 
-raw = "/data2/local_datasets/encoder/bgem3"
-ft = "/data2/local_datasets/encoder/bgem3/ft/checkpoint-1815"
+# raw = "/data2/local_datasets/encoder/bgem3"
+raw = "dragonkue/bge-m3-ko"
+ft = "/data2/local_datasets/encoder/bgem3/ft"
 
-raw_custom = "/data2/local_datasets/encoder/bgem3_custom"
-ft_custom = "/data2/local_datasets/encoder/bgem3_custom/ft/checkpoint-1815"
+# raw_custom = "/data2/local_datasets/encoder/bgem3_custom"
+raw_custom = "dragonkue/bge-m3-ko"
+ft_custom = "/data2/local_datasets/encoder/bgem3_custom/ft"
 
 #### Raw model ####
 

@@ -16,12 +16,12 @@ for key, value in ft_state_dict.items():
 
 ##########################
 
-raw_filepath = "/data2/local_datasets/encoder/bgem3/ft/model.safetensors"
+raw_ft_filepath = "/data2/local_datasets/encoder/bgem3/ft/model.safetensors"
 
-raw_state_dict = load_file(raw_filepath)
+raw_ft_state_dict = load_file(raw_ft_filepath)
 
-print("## Raw model ##")
+print("## Raw FT model ##")
 
-for key, value in raw_state_dict.items():
+for key, value in raw_ft_state_dict.items():
     if key == "encoder.layer.23.attention.output.dense.weight":
         print(f"{key}: {value}")

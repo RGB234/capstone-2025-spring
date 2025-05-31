@@ -14,8 +14,8 @@ from FlagEmbedding.abc.finetune.embedder import (
 
 # from .modeling import EncoderOnlyEmbedderM3Model
 from .modeling import (
-    BGEM3ClusterModel,
-    SentenceClusteringLayer,
+    BGEM3SAModel,
+    SentenceAttentionLayer,
     SentenceMultiHeadAttention,
 )
 from .trainer import EncoderOnlyEmbedderM3Trainer
@@ -27,27 +27,31 @@ from .arguments import (
 
 ###
 from transformers import TrainerCallback
-import torch
 
 logger = logging.getLogger(__name__)
 
 
 class WeightChangeTrackerCallback(TrainerCallback):
-    def __init__(self, layer_name="clustering_layer.attention.query_dense.weight"):
-        self.layer_name = layer_name
+    def __init__(
+        self, layer_names=["sentence_attention_layer.attention.out_dense.weight"]
+    ):
+        self.layer_names = layer_names
         self.prev_weights = None
 
-    def on_step_end(self, args, state, control, model=None, **kwargs):
+    def on_epoch_end(self, args, state, control, model=None, **kwargs):
         with torch.no_grad():
-            weight = dict(model.named_parameters())[self.layer_name].clone().cpu()
+            for layer_name in self.layer_names:
+                weight = dict(model.named_parameters())[layer_name].clone().cpu()
+                print()
+                print(weight)
 
-            if self.prev_weights is not None:
-                delta = torch.norm(weight - self.prev_weights).item()
-                logger.info(
-                    f"[Step {state.global_step}] {self.layer_name} changed by {delta:.6f}"
-                )
+            # if self.prev_weights is not None:
+            #     delta = torch.norm(weight - self.prev_weights).item()
+            #     print(
+            #         f"[Step {state.global_step}] {self.layer_name} changed by {delta:.6f}"
+            #     )
 
-            self.prev_weights = weight
+            # self.prev_weights = weight
 
 
 class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
@@ -113,7 +117,7 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             in_features=model.config.hidden_size, out_features=1
         )
         #
-        clustering_layer = SentenceClusteringLayer(
+        sentence_attention_layer = SentenceAttentionLayer(
             dff=model.config.intermediate_size,
             d_model=model.config.hidden_size,
             num_heads=model.config.num_attention_heads,
@@ -122,10 +126,15 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
 
         colbert_model_path = os.path.join(model_name_or_path, "colbert_linear.pt")
         sparse_model_path = os.path.join(model_name_or_path, "sparse_linear.pt")
+        colbert_linear: torch.nn.Linear
         #
-        cluster_model_path = os.path.join(model_name_or_path, "cluster_layer.pt")
+        sentence_attention_model_path = os.path.join(
+            model_name_or_path, "sentence_attention_layer.pt"
+        )
         if os.path.exists(colbert_model_path) and os.path.exists(sparse_model_path):
-            logger.info("loading existing colbert_linear and sparse_linear---------")
+            logger.info(
+                "loading existing colbert_linear and sparse_linear---------!!!!!!!!!"
+            )
             colbert_state_dict = torch.load(
                 colbert_model_path, map_location="cpu", weights_only=True
             )
@@ -140,15 +149,15 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             )
 
         #
-        if os.path.exists(cluster_model_path):
-            logger.info("loading existing cluster_layer---------")
-            cluster_state_dict = torch.load(
-                cluster_model_path, map_location="cpu", weights_only=True
+        if os.path.exists(sentence_attention_model_path):
+            logger.info("loading existing sentence_attention_layer---------")
+            sentence_attention_state_dict = torch.load(
+                sentence_attention_model_path, map_location="cpu", weights_only=True
             )
-            clustering_layer.load_state_dict(cluster_state_dict)
+            sentence_attention_layer.load_state_dict(sentence_attention_state_dict)
         else:
             logger.info(
-                "The parameters of clustering layer is new initialize. Make sure the model is loaded for training, not inferencing"
+                "The parameters of sentence attention layer is new initialize. Make sure the model is loaded for training, not inferencing"
             )
 
         return {
@@ -156,7 +165,7 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             "colbert_linear": colbert_linear,
             "sparse_linear": sparse_linear,
             #
-            "clustering_layer": clustering_layer,
+            "sentence_attention_layer": sentence_attention_layer,
         }
 
     def load_tokenizer_and_model(self) -> Tuple[PreTrainedTokenizer, AbsEmbedderModel]:
@@ -187,7 +196,7 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
         logger.info("Config: %s", config)
 
         # model = EncoderOnlyEmbedderM3Model(
-        model = BGEM3ClusterModel(
+        model = BGEM3SAModel(
             self.get_model(
                 self.model_args.model_name_or_path,
                 self.model_args.trust_remote_code,
@@ -216,8 +225,14 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
 
         if self.training_args.fix_encoder:
             for k, v in model.named_parameters():
-                if "colbert_linear" in k or "sparse_linear" in k:
+                # if "colbert_linear" in k or 1"sparse_linear" in k :
+                if (
+                    "colbert_linear" in k
+                    or "sparse_linear" in k
+                    or "sentence_attention_layer" in k
+                ):
                     logging.info(f"train the parameters for {k}")
+                    v.requires_grad = True
                 else:
                     v.requires_grad = False
 
@@ -242,4 +257,11 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             )
         #
         trainer.add_callback(WeightChangeTrackerCallback())
+
+        # debugging
+        # print("parameters.requires_grad == true")
+        # for name, param in trainer.model.named_parameters():
+        #     if param.requires_grad:
+        #         print(name)
+
         return trainer

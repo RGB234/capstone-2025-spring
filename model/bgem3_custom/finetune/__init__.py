@@ -8,19 +8,19 @@ from .arguments import (
 )
 
 # from .modeling import EncoderOnlyEmbedderM3Model, EncoderOnlyEmbedderM3ModelForInference
-from .modeling import BGEM3ClusterModel, BGEM3ClusterForInference
+from .modeling import BGEM3SAModel, BGEM3SAModelForInference
 from .trainer import EncoderOnlyEmbedderM3Trainer
 from .runner import EncoderOnlyEmbedderM3Runner
 
 
 __all__ = [
     "EncoderOnlyEmbedderM3ModelArguments",
-    "EncoderOnlyEmbedderM3DataArguments",
+    "EncoderOnlyEmbedderM3DataArguments",  # FlagEmbedding
     "EncoderOnlyEmbedderM3TrainingArguments",
     # "EncoderOnlyEmbedderM3Model",
     # "EncoderOnlyEmbedderM3ModelForInference",
-    "BGEM3ClusterModel",
-    "BGEM3ClusterForInference",
+    "BGEM3SAModel",
+    "BGEM#SAModelForInference",
     "EncoderOnlyEmbedderM3Trainer",
     "EncoderOnlyEmbedderM3Runner",
 ]
