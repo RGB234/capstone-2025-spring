@@ -3,6 +3,7 @@ from dataclasses import dataclass, field
 from FlagEmbedding.abc.finetune.embedder import (
     AbsEmbedderTrainingArguments,
     AbsEmbedderModelArguments,
+    AbsEmbedderDataArguments,
 )
 
 
@@ -34,3 +35,10 @@ class EncoderOnlyEmbedderM3TrainingArguments(AbsEmbedderTrainingArguments):
     self_distill_start_step: int = field(
         default=-1, metadata={"help": "Num of step when using self-distill"}
     )
+
+
+# @dataclass
+# class EncoderOnlyEmbedderM3DataArguments(AbsEmbedderDataArguments):
+#     eval_data : str = field(
+#         default=None, metadata={"help": "eval_dataset argument of transformers.Trainer. One or more paths to training data. `query: str`, `pos: List[str]`, `neg: List[str]` are required in the training data." }
+#     )

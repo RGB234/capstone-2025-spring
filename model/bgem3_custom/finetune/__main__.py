@@ -9,7 +9,7 @@ from transformers import HfArgumentParser
 
 
 from finetune import (
-    EncoderOnlyEmbedderM3DataArguments,  # FlagEmbedding
+    EncoderOnlyEmbedderM3DataArguments,
     EncoderOnlyEmbedderM3TrainingArguments,
     EncoderOnlyEmbedderM3ModelArguments,
     EncoderOnlyEmbedderM3Runner,

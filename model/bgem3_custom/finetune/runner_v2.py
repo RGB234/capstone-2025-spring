@@ -15,7 +15,6 @@ from FlagEmbedding.abc.finetune.embedder import (
 # from .modeling import EncoderOnlyEmbedderM3Model
 from .modeling import (
     BGEM3SAModel,
-    SentenceAttentionModule,
 )
 from .trainer import EncoderOnlyEmbedderM3Trainer
 from .arguments import (
@@ -27,11 +26,9 @@ from .arguments import (
 ###
 from transformers import TrainerCallback
 
-logger = logging.getLogger(__name__)
-
 
 class WeightChangeTrackerCallback(TrainerCallback):
-    def __init__(self, layer_name="sentence_attention_module.layers.5.norm2.weight"):
+    def __init__(self, layer_name="category_linear.weight"):
         # def __init__(self, layer_names=["category_linear.weight"]):
         # self.layer_names = layer_names
         self.layer_name = layer_name
@@ -52,6 +49,9 @@ class WeightChangeTrackerCallback(TrainerCallback):
                 )
 
             self.prev_weights = weight
+
+
+logger = logging.getLogger(__name__)
 
 
 class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
@@ -117,20 +117,16 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             in_features=model.config.hidden_size, out_features=1
         )
         #
-        sentence_attention_module = SentenceAttentionModule(
-            dff=model.config.intermediate_size,
-            d_model=model.config.hidden_size,
-            num_heads=model.config.num_attention_heads,
-            dropout=model.config.hidden_dropout_prob,
+        category_linear = torch.nn.Linear(
+            in_features=model.config.hidden_size, out_features=model.config.hidden_size
         )
 
         colbert_model_path = os.path.join(model_name_or_path, "colbert_linear.pt")
         sparse_model_path = os.path.join(model_name_or_path, "sparse_linear.pt")
         colbert_linear: torch.nn.Linear
         #
-        sentence_attention_model_path = os.path.join(
-            model_name_or_path, "sentence_attention_module.pt"
-        )
+        category_model_path = os.path.join(model_name_or_path, "category_linear.pt")
+
         if os.path.exists(colbert_model_path) and os.path.exists(sparse_model_path):
             logger.info(
                 "loading existing colbert_linear and sparse_linear---------!!!!!!!!!"
@@ -149,15 +145,15 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             )
 
         #
-        if os.path.exists(sentence_attention_model_path):
-            logger.info("loading existing sentence_attention_module---------")
-            sentence_attention_state_dict = torch.load(
-                sentence_attention_model_path, map_location="cpu", weights_only=True
+        if os.path.exists(category_model_path):
+            logger.info("loading existing category_linear---------")
+            category_state_dict = torch.load(
+                category_model_path, map_location="cpu", weights_only=True
             )
-            sentence_attention_module.load_state_dict(sentence_attention_state_dict)
+            category_linear.load_state_dict(category_state_dict)
         else:
             logger.info(
-                "The parameters of sentence_attention_module is new initialize. Make sure the model is loaded for training, not inferencing"
+                "The parameters of category_linear is new initialize. Make sure the model is loaded for training, not inferencing"
             )
 
         return {
@@ -165,7 +161,7 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             "colbert_linear": colbert_linear,
             "sparse_linear": sparse_linear,
             #
-            "sentence_attention_module": sentence_attention_module,
+            "category_linear": category_linear,
         }
 
     def load_tokenizer_and_model(self) -> Tuple[PreTrainedTokenizer, AbsEmbedderModel]:
@@ -229,7 +225,8 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
                 if (
                     "colbert_linear" in k
                     or "sparse_linear" in k
-                    or "sentence_attention_module" in k
+                    #
+                    or "category_linear" in k
                 ):
                     logging.info(f"train the parameters for {k}")
                     v.requires_grad = True

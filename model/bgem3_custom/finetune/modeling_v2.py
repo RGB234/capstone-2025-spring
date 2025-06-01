@@ -10,120 +10,6 @@ from transformers import PreTrainedTokenizer
 from FlagEmbedding.abc.finetune.embedder import AbsEmbedderModel, EmbedderOutput
 
 
-# Custom Sub-layer
-class SentenceMultiHeadAttention(nn.Module):
-    def __init__(self, d_model, num_heads):
-        """
-        Args :
-          d_model : hidden_size
-          num_heads : num_attention_heads
-        """
-        super().__init__()
-        self.d_model = d_model
-        self.num_heads = num_heads
-
-        assert d_model % num_heads == 0
-        self.depth = d_model // num_heads
-
-        self.query_dense = nn.Linear(d_model, d_model)
-        self.key_dense = nn.Linear(d_model, d_model)
-        self.value_dense = nn.Linear(d_model, d_model)
-        self.out_dense = nn.Linear(d_model, d_model)
-
-    def split_heads(self, x):
-        # (batch_size, d_model) → (batch_size, num_heads, depth)
-        batch_size = x.size(0)
-        x = x.view(batch_size, self.num_heads, self.depth)
-        return x.transpose(0, 1)  # (num_heads, batch_size, depth)
-
-    def scaled_dot_product(self, query, key, value):
-        dk = query.size(-1)
-        scores = torch.matmul(query, key.transpose(-2, -1)) / (dk**0.5)
-        weights = F.softmax(scores, dim=-1)
-        output = torch.matmul(weights, value)
-        return output, weights
-
-    def forward(self, query, key, value) -> torch.Tensor:
-        # Input: (batch_size, d_model)
-        query = self.query_dense(query)
-        key = self.key_dense(key)
-        value = self.value_dense(value)
-
-        query = self.split_heads(query)
-        key = self.split_heads(key)
-        value = self.split_heads(value)
-
-        scaled_attention, _ = self.scaled_dot_product(query, key, value)
-
-        # (num_heads, batch_size, depth) → (batch_size, num_heads, depth)
-        scaled_attention = scaled_attention.transpose(0, 1)
-        concat_attention = scaled_attention.reshape(-1, self.d_model)
-
-        output = self.out_dense(concat_attention)
-        return output
-
-
-# Custom Embedding layer
-class SentenceAttentionLayer(nn.Module):
-    """
-    Args :
-      dff : feedforward_size
-      d_model : model hidden_size
-      num_heads : number of attention heads
-      dropout : dropout rate
-
-    Returns:
-      sentence_attention_embedding : (batch_size, d_model)
-    """
-
-    def __init__(self, dff, d_model, num_heads, dropout):
-        super().__init__()
-        self.attention = SentenceMultiHeadAttention(d_model, num_heads)
-        self.dropout1 = nn.Dropout(dropout)
-        self.norm1 = nn.LayerNorm(d_model)
-
-        self.ffn = nn.Sequential(
-            nn.Linear(d_model, dff),
-            nn.ReLU(),
-            nn.Linear(dff, d_model),
-        )
-        self.dropout2 = nn.Dropout(dropout)
-        self.norm2 = nn.LayerNorm(d_model)
-
-    def forward(self, x):
-        # x: (batch_size, d_model)
-        attn_output = self.attention(x, x, x)
-        attn_output = self.dropout1(attn_output)
-        out1 = self.norm1(x + attn_output)
-
-        ffn_output = self.ffn(out1)
-        ffn_output = self.dropout2(ffn_output)
-        out2 = self.norm2(out1 + ffn_output)
-        return out2
-
-
-# custom module
-class SentenceAttentionModule(nn.Module):
-    def __init__(self, dff, d_model, num_heads, dropout):
-        super().__init__()
-        self.num_layers = 4
-        self.layers = nn.ModuleList(
-            [
-                SentenceAttentionLayer(dff, d_model, num_heads, dropout)
-                for _ in range(self.num_layers)
-            ]
-        )
-
-    def forward(self, sent_emb):
-        """
-        sent_emb : sentence embeddings. (batch_size, d_model)
-        """
-        output = sent_emb
-        for layer in self.layers:
-            output = layer(output)
-        return output
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -177,13 +63,13 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
             self.colbert_linear = None
             self.sparse_linear = None
             #
-            self.sentence_attention_module = None
+            self.category_linear = None
         else:
             self.model = base_model["model"]
             self.colbert_linear = base_model["colbert_linear"]
             self.sparse_linear = base_model["sparse_linear"]
             #
-            self.sentence_attention_module = base_model["sentence_attention_module"]
+            self.category_linear = base_model["category_linear"]
 
         self.config = self.model.config
 
@@ -253,12 +139,12 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
             sparse_embedding = torch.zeros(
                 input_ids.size(0),
                 input_ids.size(1),
-                self.vocab_size,
+                self.vocab_size,  # seq_len
                 dtype=token_weights.dtype,
                 device=token_weights.device,
             )
             sparse_embedding = torch.scatter(
-                sparse_embedding,  # (batch_size, seq_len, vocab_size)
+                sparse_embedding,  # (batch_size, seq_len, seq_len)
                 dim=-1,
                 index=input_ids.unsqueeze(-1),  # (batch_size, seq_len, 1)
                 src=token_weights,  # (batch_szie, seq_len, 1)
@@ -310,13 +196,17 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
         return colbert_vecs
 
     #
-    def _sentence_attention_embedding(self, last_hidden_state, mask):
+    def _category_embedding(self, last_hidden_state, mask):
         dense_embedding = self._dense_embedding(
             last_hidden_state, mask
         )  # (batch_size, hidden_size)
-        sentence_attention_embedding = self.sentence_attention_module(dense_embedding)
 
-        return sentence_attention_embedding
+        W0 = F.softmax(torch.matmul(dense_embedding, dense_embedding.T), dim=0)
+        category_embedding = torch.matmul(W0, dense_embedding)
+
+        category_embedding = self.category_linear(category_embedding)
+
+        return category_embedding
 
     def compute_score(
         self,
@@ -327,8 +217,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
         sparse_weight: float = 0.3,
         colbert_weight: float = 1.0,
         #
-        sentence_attention_weight: float = 0.3,
-        # sentence_attention_weight: float = 1.0,
+        # category_weight: float = 0.3,
+        category_weight: float = 1.0,
     ):
         """_summary_
 
@@ -346,13 +236,13 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
         dense_score = self.compute_dense_score(q_reps, p_reps)
         sparse_score = self.compute_sparse_score(q_reps, p_reps)
         colbert_score = self.compute_colbert_score(q_reps, p_reps, q_mask=q_mask)
-        sentence_attention_score = self.compute_sentence_attention_score(q_reps, p_reps)
+        category_score = self.compute_category_score(q_reps, p_reps)
         return (
             dense_score * dense_weight
             + sparse_score * sparse_weight
             + colbert_score * colbert_weight
             #
-            + sentence_attention_score * sentence_attention_weight
+            + category_score * category_weight
         )
 
     def compute_dense_score(self, q_reps, p_reps):
@@ -400,7 +290,7 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
         return scores
 
     #
-    def compute_sentence_attention_score(self, q_reps, p_reps):
+    def compute_category_score(self, q_reps, p_reps):
         scores = self._compute_similarity(q_reps, p_reps) / self.temperature
         scores = scores.view(q_reps.size(0), -1)
         return scores
@@ -412,7 +302,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
         dense_scores=None,
         sparse_scores=None,
         colbert_scores=None,
-        sentence_attention_scores=None,
+        #
+        category_scores=None,
     ):
         """Compute the ensemble score of the three methods.
 
@@ -433,18 +324,18 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
             dense_scores is None
             or sparse_scores is None
             or colbert_scores is None
-            or sentence_attention_scores is None
+            or category_scores is None
         ):
             raise ValueError(
-                "dense_scores, sparse_scores, colbert_scores, sentence_attention_scores must be provided!"
+                "dense_scores, sparse_scores, colbert_scores must be provided!"
             )
         return (
             dense_scores
             + 0.3 * sparse_scores
             + colbert_scores
             #
-            + 0.3 * sentence_attention_scores
-            # + sentence_attention_scores
+            # + 0.3 * category_scores
+            + category_scores
         )
 
     def _encode(self, features):
@@ -460,7 +351,7 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
             +
             torch.Tensor: Sentence attention embedding
         """
-        dense_vecs, sparse_vecs, colbert_vecs, sentence_attention_vecs = (
+        dense_vecs, sparse_vecs, colbert_vecs, category_vecs = (
             None,
             None,
             None,
@@ -478,7 +369,7 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                 last_hidden_state, features["attention_mask"]
             )
             #
-            sentence_attention_vecs = self._sentence_attention_embedding(
+            category_vecs = self._category_embedding(
                 last_hidden_state, features["attention_mask"]
             )
         if self.normalize_embeddings:
@@ -486,8 +377,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
             if self.unified_finetuning:
                 colbert_vecs = F.normalize(colbert_vecs, dim=-1)
                 #
-                sentence_attention_vecs = F.normalize(sentence_attention_vecs, dim=-1)
-        return dense_vecs, sparse_vecs, colbert_vecs, sentence_attention_vecs
+                category_vecs = F.normalize(category_vecs, dim=-1)
+        return dense_vecs, sparse_vecs, colbert_vecs, category_vecs
 
     def encode(self, features):
         """Encode and get the embedding.
@@ -511,7 +402,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                     all_dense_vecs,
                     all_sparse_vecs,
                     all_colbert_vecs,
-                    all_sentence_attention_vecs,
+                    #
+                    all_category_vecs,
                 ) = ([], [], [], [])
                 for i in range(0, len(features["attention_mask"]), self.sub_batch_size):
                     end_inx = min(
@@ -521,47 +413,49 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                     for k, v in features.items():
                         sub_features[k] = v[i:end_inx]
 
-                    dense_vecs, sparse_vecs, colbert_vecs, sentence_attention_vecs = (
-                        self._encode(sub_features)
+                    dense_vecs, sparse_vecs, colbert_vecs, category_vecs = self._encode(
+                        sub_features
                     )
                     all_dense_vecs.append(dense_vecs)
                     all_sparse_vecs.append(sparse_vecs)
                     all_colbert_vecs.append(colbert_vecs)
                     #
-                    all_sentence_attention_vecs.append(sentence_attention_vecs)
+                    all_category_vecs.append(category_vecs)
 
                 dense_vecs = torch.cat(all_dense_vecs, 0)
                 if self.unified_finetuning:
                     sparse_vecs = torch.cat(all_sparse_vecs, 0)
                     colbert_vecs = torch.cat(all_colbert_vecs, 0)
                     #
-                    sentence_attention_vecs = torch.cat(all_sentence_attention_vecs, 0)
+                    category_vecs = torch.cat(all_category_vecs, 0)
             else:
-                dense_vecs, sparse_vecs, colbert_vecs, sentence_attention_vecs = (
-                    self._encode(features)
+                dense_vecs, sparse_vecs, colbert_vecs, category_vecs = self._encode(
+                    features
                 )
         else:
             (
                 all_dense_vecs,
                 all_sparse_vecs,
                 all_colbert_vecs,
-                all_sentence_attention_vecs,
+                #
+                all_category_vecs,
             ) = ([], [], [], [])
             for sub_features in features:
-                dense_vecs, sparse_vecs, colbert_vecs, sentence_attention_vecs = (
-                    self._encode(sub_features)
+                dense_vecs, sparse_vecs, colbert_vecs, category_vecs = self._encode(
+                    sub_features
                 )
                 all_dense_vecs.append(dense_vecs)
                 all_sparse_vecs.append(sparse_vecs)
                 all_colbert_vecs.append(colbert_vecs)
                 #
-                all_sentence_attention_vecs.append(sentence_attention_vecs)
+                all_category_vecs.append(category_vecs)
 
             dense_vecs = torch.cat(all_dense_vecs, 0)
             if self.unified_finetuning:
                 sparse_vecs = torch.cat(all_sparse_vecs, 0)
                 colbert_vecs = torch.cat(all_colbert_vecs, 0)
-                sentence_attention_vecs = torch.cat(all_sentence_attention_vecs, 0)
+                #
+                category_vecs = torch.cat(all_category_vecs, 0)
 
         if self.unified_finetuning:
             return (
@@ -569,7 +463,7 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                 sparse_vecs.contiguous(),
                 colbert_vecs.contiguous(),
                 #
-                sentence_attention_vecs.contiguous(),
+                category_vecs.contiguous(),
             )
         else:
             return dense_vecs.contiguous(), None, None, None
@@ -640,10 +534,10 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
         Returns:
             EmbedderOutput: Output of the forward call of model.
         """
-        q_dense_vecs, q_sparse_vecs, q_colbert_vecs, q_sentence_attention_vecs = (
-            self.encode(queries)
+        q_dense_vecs, q_sparse_vecs, q_colbert_vecs, q_category_vecs = self.encode(
+            queries
         )  # (batch_size, dim)
-        p_dense_vecs, p_sparse_vecs, p_colbert_vecs, _ = self.encode(
+        p_dense_vecs, p_sparse_vecs, p_colbert_vecs, p_category_vecs = self.encode(
             passages
         )  # (batch_size * group_size, dim)
 
@@ -661,9 +555,6 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
             else:
                 teacher_targets = None
 
-            #
-
-            #
             if no_in_batch_neg_flag:
                 compute_loss_func = self._compute_no_in_batch_neg_loss
             else:
@@ -671,14 +562,6 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                     compute_loss_func = self._compute_cross_device_neg_loss
                 else:
                     compute_loss_func = self._compute_in_batch_neg_loss
-
-            """
-                *_scores are computed by query-passage pairs. 
-                
-                each passage consists of one positive sample, selected randomly from the list of 'pos' and assigned to passage[0], 
-                followed by other negative samples.
-                Please refer to FlagEmbedding.abc.finetune.embedder.AbsDataset.AbsEmbedderTrainDataset.__getitem__()
-            """
 
             # dense loss
             dense_scores, loss = compute_loss_func(
@@ -713,14 +596,11 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                 )
 
                 #
-                # sentence attention loss
-                sentence_attention_scores, sentence_attention_loss = compute_loss_func(
-                    q_sentence_attention_vecs,
-                    #
-                    p_dense_vecs,
-                    #
+                category_scores, category_loss = compute_loss_func(
+                    q_category_vecs,
+                    p_category_vecs,
                     teacher_targets=teacher_targets,
-                    compute_score_func=self.compute_sentence_attention_score,
+                    compute_score_func=self.compute_category_score,
                 )
 
                 # get dense scores of current process
@@ -755,7 +635,7 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                     sparse_scores=sparse_scores,
                     colbert_scores=colbert_scores,
                     #
-                    sentence_attention_scores=sentence_attention_scores,
+                    category_scores=category_scores,
                 )
 
                 # loss = (loss + ensemble_loss + 0.1 * sparse_loss + colbert_loss) / 4
@@ -764,8 +644,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                     + ensemble_loss
                     + 0.1 * sparse_loss
                     + colbert_loss
-                    + 0.1 * sentence_attention_loss
-                    # + sentence_attention_loss
+                    # + 0.1 * category_loss
+                    + category_loss
                 ) / 5
 
                 if self.use_self_distill and self.step > self.self_distill_start_step:
@@ -783,8 +663,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                         "kl_div", self_teacher_targets, colbert_scores
                     )
                     #
-                    sentence_self_distill_loss = self.distill_loss(
-                        "kl_div", self_teacher_targets, sentence_attention_scores
+                    category_self_distill_loss = self.distill_loss(
+                        "kl_div", self_teacher_targets, category_scores
                     )
 
                     # loss += (
@@ -797,8 +677,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                         + 0.1 * sparse_self_distill_loss
                         + colbert_self_distill_loss
                         #
-                        + 0.1 * sentence_self_distill_loss
-                        # + sentence_self_distill_loss
+                        # + 0.1 * category_self_distill_loss
+                        + category_self_distill_loss
                     ) / 4
 
                     loss = loss / 2
@@ -862,8 +742,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
             )
             #
             torch.save(
-                _trans_state_dict(self.sentence_attention_module.state_dict()),
-                os.path.join(output_dir, "sentence_attention_module.pt"),
+                _trans_state_dict(self.category_linear.state_dict()),
+                os.path.join(output_dir, "category_linear.pt"),
             )
 
 
@@ -880,7 +760,7 @@ class BGEM3SAModelForInference(BGEM3SAModel):
         return_colbert_vecs: bool = False,
         return_sparse_embedding: bool = False,
         #
-        return_sentence_attention_vecs: bool = False,
+        return_category: bool = False,
     ):
         """Encode the text input using the selected way.
 
@@ -896,11 +776,8 @@ class BGEM3SAModelForInference(BGEM3SAModel):
             dict: A dictionary containing the three types of embeddings.
         """
         assert (
-            return_dense
-            or return_sparse
-            or return_colbert_vecs
-            or return_sentence_attention_vecs
-        ), "Must choose one or more from `return_colbert_vecs`, `return_sparse`, `return_dense`, `return_sentence_attention_embedding` to set `True`!"
+            return_dense or return_sparse or return_colbert_vecs or return_category
+        ), "Must choose one or more from `return_colbert_vecs`, `return_sparse`, `return_dense` to set `True`!"
 
         # this is for sparse embedding computation: using optimization suggestion from
         # issue #1364: https://github.com/FlagOpen/FlagEmbedding/issues/1364
@@ -927,11 +804,11 @@ class BGEM3SAModelForInference(BGEM3SAModel):
             )
             output["colbert_vecs"] = colbert_vecs
         #
-        if return_sentence_attention_vecs:
-            sentence_attention_vecs = self._sentence_attention_embedding(
+        if return_category:
+            category_vecs = self._category_embedding(
                 last_hidden_state, text_input["attention_mask"]
             )
-            output["sentence_attention_vecs"] = sentence_attention_vecs
+            output["category_vecs"] = category_vecs
 
         if self.normalize_embeddings:
             if "dense_vecs" in output:
@@ -939,9 +816,7 @@ class BGEM3SAModelForInference(BGEM3SAModel):
             if "colbert_vecs" in output:
                 output["colbert_vecs"] = F.normalize(output["colbert_vecs"], dim=-1)
             #
-            if "sentence_attention_vecs" in output:
-                output["sentence_attention_vecs"] = F.normalize(
-                    output["sentence_attention_vecs"], dim=-1
-                )
+            if "category_vecs" in output:
+                output["category_vecs"] = F.normalize(output["category_vecs"], dim=-1)
 
         return output

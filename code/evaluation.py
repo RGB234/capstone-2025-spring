@@ -6,9 +6,11 @@ from datasets import load_dataset
 dataset_dir = "/data2/local_datasets/encoder/data"
 
 # GPT-based dataset
-# queries = load_dataset("json", data_files=f"{dataset_dir}/test_queries.jsonl")["train"]
-# corpus = load_dataset("json", data_files=f"{dataset_dir}/test_corpus.jsonl")["train"]
-# qrels = load_dataset("json", data_files=f"{dataset_dir}/test_qrels.jsonl")["train"]
+# queries = load_dataset("json", data_files=f"{dataset_dir}/ft_test_queries.jsonl")[
+#     "train"
+# ]
+# corpus = load_dataset("json", data_files=f"{dataset_dir}/ft_test_corpus.jsonl")["train"]
+# qrels = load_dataset("json", data_files=f"{dataset_dir}/ft_test_qrels.jsonl")["train"]
 
 # KLAID
 queries = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_queries.jsonl")[

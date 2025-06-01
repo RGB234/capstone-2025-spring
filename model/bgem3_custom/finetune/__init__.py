@@ -5,6 +5,8 @@ from FlagEmbedding.abc.finetune.embedder import (
 from .arguments import (
     EncoderOnlyEmbedderM3ModelArguments,
     EncoderOnlyEmbedderM3TrainingArguments,
+    #
+    # EncoderOnlyEmbedderM3DataArguments,
 )
 
 # from .modeling import EncoderOnlyEmbedderM3Model, EncoderOnlyEmbedderM3ModelForInference
