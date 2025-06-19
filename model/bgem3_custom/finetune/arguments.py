@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from typing import Union
 
 from FlagEmbedding.abc.finetune.embedder import (
     AbsEmbedderTrainingArguments,
@@ -36,9 +37,50 @@ class EncoderOnlyEmbedderM3TrainingArguments(AbsEmbedderTrainingArguments):
         default=-1, metadata={"help": "Num of step when using self-distill"}
     )
 
+    # For EarlyStoppingCallback
+    # save_strategy: str = field(
+    #     default="steps",
+    #     metadata={
+    #         "help": "The checkpoint save strategy to adopt during training.",
+    #     },
+    #     kw_only=["no", "epoch", "steps", "best"],
+    # )
+    # eval_strategy: str = field(
+    #     default="steps",
+    #     metadata={"help": "The evaluation strategy to adopt during training."},
+    #     kw_only=["No", "steps", "epoch"],
+    # )
+    # load_best_model_at_end: bool = field(
+    #     default=True,
+    #     metadata={
+    #         "help": """Whether or not to load the best model found during training at the end of training. When this option is enabled, the best checkpoint will always be saved.
+    #         When set to True, the parameters save_strategy needs to be the same as eval_strategy, and in the case it is “steps”, save_steps must be a round multiple of eval_steps."""
+    #     },
+    # )
 
-# @dataclass
-# class EncoderOnlyEmbedderM3DataArguments(AbsEmbedderDataArguments):
-#     eval_data : str = field(
-#         default=None, metadata={"help": "eval_dataset argument of transformers.Trainer. One or more paths to training data. `query: str`, `pos: List[str]`, `neg: List[str]` are required in the training data." }
-#     )
+    # eval_steps: int = field(
+    #     default=100,
+    #     metadata={
+    #         "help": """Number of update steps between two evaluations if eval_strategy="steps". Will default to the same value as logging_steps if not set.
+    #         Note that if the TrainingArguments argument save_steps differs from eval_steps, the early stopping will not occur until the next save step.
+    #         """
+    #     },
+    # )
+    # metric_for_best_model: str = field(
+    #     default="eval_loss",
+    #     metadata={
+    #         "help": """Use in conjunction with load_best_model_at_end to specify the metric to use to compare two different models. Must be the name of a metric returned by the evaluation with or without the prefix \"eval_\".
+    #         When set to None, `eval_loss` is used as the default metric."""
+    #     },
+    # )
+
+
+@dataclass
+class EncoderOnlyEmbedderM3DataArguments(AbsEmbedderDataArguments):
+    eval_data: str = field(
+        default=None,
+        metadata={
+            "help": "eval_dataset argument of transformers.Trainer. One or more paths to training data. `query: str`, `pos: List[str]`, `neg: List[str]` are required in the training data.",
+            "nargs": "+",
+        },
+    )

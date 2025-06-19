@@ -106,7 +106,7 @@ class SentenceAttentionLayer(nn.Module):
 class SentenceAttentionModule(nn.Module):
     def __init__(self, dff, d_model, num_heads, dropout):
         super().__init__()
-        self.num_layers = 4
+        self.num_layers = 8
         self.layers = nn.ModuleList(
             [
                 SentenceAttentionLayer(dff, d_model, num_heads, dropout)
@@ -643,8 +643,8 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
         q_dense_vecs, q_sparse_vecs, q_colbert_vecs, q_sentence_attention_vecs = (
             self.encode(queries)
         )  # (batch_size, dim)
-        p_dense_vecs, p_sparse_vecs, p_colbert_vecs, _ = self.encode(
-            passages
+        p_dense_vecs, p_sparse_vecs, p_colbert_vecs, p_sentence_attention_vecs = (
+            self.encode(passages)
         )  # (batch_size * group_size, dim)
 
         if self.training:
@@ -716,9 +716,7 @@ class BGEM3SAModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module):
                 # sentence attention loss
                 sentence_attention_scores, sentence_attention_loss = compute_loss_func(
                     q_sentence_attention_vecs,
-                    #
-                    p_dense_vecs,
-                    #
+                    p_sentence_attention_vecs,
                     teacher_targets=teacher_targets,
                     compute_score_func=self.compute_sentence_attention_score,
                 )

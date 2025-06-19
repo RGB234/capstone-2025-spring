@@ -13,13 +13,24 @@ dataset_dir = "/data2/local_datasets/encoder/data"
 # qrels = load_dataset("json", data_files=f"{dataset_dir}/ft_test_qrels.jsonl")["train"]
 
 # KLAID
-queries = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_queries.jsonl")[
+# queries = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_queries.jsonl")[
+#     "train"
+# ]
+# corpus = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_corpus.jsonl")[
+#     "train"
+# ]
+# qrels = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_qrels.jsonl")[
+#     "train"
+# ]
+
+# KLAID. K=10
+queries = load_dataset(
+    "json", data_files=f"{dataset_dir}/KLAID_test_queries_k10.jsonl"
+)["train"]
+corpus = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_corpus_k10.jsonl")[
     "train"
 ]
-corpus = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_corpus.jsonl")[
-    "train"
-]
-qrels = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_qrels.jsonl")[
+qrels = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_qrels_k10.jsonl")[
     "train"
 ]
 
@@ -71,7 +82,7 @@ def search(model, queries_text, corpus_text):
     # store the results into the format for evaluation
     results = {}
     for idx, (scores, indices) in enumerate(zip(all_scores, all_indices)):
-        results[queries["id"][idx]] = {}
+        results[queries["id"][idx]] = {}  # len(results) == ceil(query_size/32)
         for score, index in zip(scores, indices):
             if index != -1:
                 results[queries["id"][idx]][corpus["id"][index]] = float(score)
@@ -84,90 +95,58 @@ def search(model, queries_text, corpus_text):
 from FlagEmbedding.abc.evaluation.utils import evaluate_metrics, evaluate_mrr
 from FlagEmbedding import FlagModel
 
-k_values = [10, 100]
 
-# raw = "/data2/local_datasets/encoder/bgem3"
-raw = "dragonkue/bge-m3-ko"
-ft = "/data2/local_datasets/encoder/bgem3/ft"
+def evaluation(model_path: str, k_values: list[int] = [10, 50]):
+    ## model loading ##
+    model = FlagModel(
+        model_path,
+        devices=[0],
+        use_fp16=False,
+    )
 
-# raw_custom = "/data2/local_datasets/encoder/bgem3_custom"
-raw_custom = "dragonkue/bge-m3-ko"
-ft_custom = "/data2/local_datasets/encoder/bgem3_custom/ft"
+    ## evaluation ##
+    results = search(model, queries_text, corpus_text)
 
-#### Raw model ####
+    eval_res = evaluate_metrics(qrels_dict, results, k_values)
+    mrr = evaluate_mrr(qrels_dict, results, k_values)
 
-print("## Raw model ##")
+    print(f"### {model_path} ###")
+    for res in eval_res:
+        print(res)
+    print(mrr)
 
 
-raw_model = FlagModel(
-    raw,
-    # query_instruction_for_retrieval="Represent this sentence for searching relevant passages:",
-    devices=[0],
-    use_fp16=False,
+#
+print("<< 파인튜닝 이전 >>")
+evaluation(
+    "dragonkue/bge-m3-ko",
 )
 
-results = search(raw_model, queries_text, corpus_text)
+print("<< 파인튜닝 이후 >>")
 
-eval_res = evaluate_metrics(qrels_dict, results, k_values)
-mrr = evaluate_mrr(qrels_dict, results, k_values)
-
-
-for res in eval_res:
-    print(res)
-print(mrr)
-
-print("## Fine-tuned Raw model ##")
-
-ft_model = FlagModel(
-    ft,
-    # query_instruction_for_retrieval="Represent this sentence for searching relevant passages:",
-    devices=[0],
-    use_fp16=False,
+# BGE-M3
+evaluation(
+    "/data2/local_datasets/encoder/bgem3/ft_5ep",
 )
 
-results = search(ft_model, queries_text, corpus_text)
-
-eval_res = evaluate_metrics(qrels_dict, results, k_values)
-mrr = evaluate_mrr(qrels_dict, results, k_values)
-
-for res in eval_res:
-    print(res)
-print(mrr)
-
-#### Custom ####
-
-print("## custom model ##")
-
-raw_custom_model = FlagModel(
-    raw_custom,
-    # query_instruction_for_retrieval="Represent this sentence for searching relevant passages:",
-    devices=[0],
-    use_fp16=False,
+evaluation(
+    "/data2/local_datasets/encoder/bgem3/ft_10ep",
 )
 
-results = search(raw_custom_model, queries_text, corpus_text)
-
-eval_res = evaluate_metrics(qrels_dict, results, k_values)
-mrr = evaluate_mrr(qrels_dict, results, k_values)
-
-for res in eval_res:
-    print(res)
-print(mrr)
-
-print("## Fine-tuned Custom model ##")
-
-ft_custom_model = FlagModel(
-    ft_custom,
-    # query_instruction_for_retrieval="Represent this sentence for searching relevant passages:",
-    devices=[0],
-    use_fp16=False,
+# Custom bge-m3 version 3
+evaluation(
+    "/data2/local_datasets/encoder/bgem3_custom/ft_5ep_v3",
 )
 
-results = search(ft_custom_model, queries_text, corpus_text)
+evaluation(
+    "/data2/local_datasets/encoder/bgem3_custom/ft_10ep_v3",
+)
 
-eval_res = evaluate_metrics(qrels_dict, results, k_values)
-mrr = evaluate_mrr(qrels_dict, results, k_values)
+# Custom bge-m3 version 4
+evaluation(
+    "/data2/local_datasets/encoder/bgem3_custom/ft_5ep_v4",
+)
 
-for res in eval_res:
-    print(res)
-print(mrr)
+evaluation(
+    "/data2/local_datasets/encoder/bgem3_custom/ft_10ep_v4",
+)

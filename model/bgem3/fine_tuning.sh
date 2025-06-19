@@ -10,6 +10,13 @@
 
 pwd
 
+"""
+bgem3
+    -logs
+    -fine_tuning.sh
+
+"""
+
 model_args="\
     --model_name_or_path dragonkue/bge-m3-ko \
     --cache_dir /data2/local_datasets/encoder/cache/bgem3/model \
@@ -19,14 +26,14 @@ data_args="\
     --train_data /data2/local_datasets/encoder/data/relevant_incidents_train_minedHN.jsonl \
     --cache_path /data2/local_datasets/encoder/cache/bgem3/data \
     --train_group_size 2 \
-    --query_max_len 256 \
-    --passage_max_len 256 \
+    --query_max_len 512 \
+    --passage_max_len 512 \
     --pad_to_multiple_of 8 \
     
 "
 
 training_args="\
-    --output_dir /data2/local_datasets/encoder/bgem3/ft \
+    --output_dir /data2/local_datasets/encoder/bgem3/ft_5ep \
     --unified_finetuning True \
     --learning_rate 1e-5 \
     --fp16 \
@@ -36,8 +43,10 @@ training_args="\
     --normalize_embeddings True \
     --temperature 0.02 \
     --negatives_cross_device \
-    --logging_steps 10 \
+    --logging_steps 100 \
     --save_steps 1000 \
+    --seed 42 \
+    --data_seed 42
 "
 num_gpus=1
 cmd="torchrun --nproc_per_node $num_gpus \
