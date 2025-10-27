@@ -98,7 +98,7 @@ def evaluation(model_path: str, k_values: list[int] = [10, 50]):
     print(mrr)
 
 
-model_dir = "/data2/local_datasets/encoder/model"
+model_dir = "/data2/local_datasets/encoder/output"
 
 print("### 테스트 데이터셋 : KLAID ###")
 
@@ -115,29 +115,29 @@ print("<< 파인튜닝 이후 >>")
 # BGE-M3
 print("# BGE-M3 #")
 evaluation(
-    f"{model_dir}/bgem3/ft_5ep",
+    f"{model_dir}/5ep/bgem3",
 )
 
 evaluation(
-    f"{model_dir}/bgem3/ft_10ep",
+    f"{model_dir}/10ep/bgem3",
 )
 
 # BGE-M3 SAQ
 print("# SAQ #")
 evaluation(
-    f"{model_dir}/bgem3saq/ft_5ep",
+    f"{model_dir}/5ep/saq",
 )
 
 evaluation(
-    f"{model_dir}/bgem3saq/ft_10ep",
+    f"{model_dir}/10ep/saq",
 )
 
 # BGE-M3 Ctrl
 print("# Ctrl #")
 evaluation(
-    f"{model_dir}/bgem3ctrl/ft_5ep",
+    f"{model_dir}/5ep/ctrl",
 )
 
 evaluation(
-    f"{model_dir}/bgem3ctrl/ft_5ep",
+    f"{model_dir}/10ep/ctrl",
 )
