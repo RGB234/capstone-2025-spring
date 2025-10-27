@@ -3,7 +3,7 @@ from datasets import load_dataset
 
 ## data loading ##
 
-dataset_dir = "/data2/local_datasets/encoder/data"
+dataset_dir = "/data2/local_datasets/encoder/dataset"
 
 # KLAID. K=10
 queries = load_dataset(
