@@ -3,36 +3,15 @@ from datasets import load_dataset
 
 ## data loading ##
 
-dataset_dir = "/data2/local_datasets/encoder/data"
+dataset_dir = "/data2/local_datasets/encoder/dataset"
 
-# GPT-based dataset
-# queries = load_dataset("json", data_files=f"{dataset_dir}/ft_test_queries.jsonl")[
-#     "train"
-# ]
-# corpus = load_dataset("json", data_files=f"{dataset_dir}/ft_test_corpus.jsonl")["train"]
-# qrels = load_dataset("json", data_files=f"{dataset_dir}/ft_test_qrels.jsonl")["train"]
-
-# KLAID
-# queries = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_queries.jsonl")[
-#     "train"
-# ]
-# corpus = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_corpus.jsonl")[
-#     "train"
-# ]
-# qrels = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_qrels.jsonl")[
-#     "train"
-# ]
-
-# KLAID. K=10
-queries = load_dataset(
-    "json", data_files=f"{dataset_dir}/KLAID_test_queries_k10.jsonl"
-)["train"]
-corpus = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_corpus_k10.jsonl")[
+GPT-based dataset
+queries = load_dataset("json", data_files=f"{dataset_dir}/gpt_test_queries.jsonl")[
     "train"
 ]
-qrels = load_dataset("json", data_files=f"{dataset_dir}/KLAID_test_qrels_k10.jsonl")[
-    "train"
-]
+corpus = load_dataset("json", data_files=f"{dataset_dir}/gpt_test_corpus.jsonl")["train"]
+qrels = load_dataset("json", data_files=f"{dataset_dir}/gpt_test_qrels.jsonl")["train"]
+
 
 queries_text = queries["text"]
 corpus_text = [text for sub in corpus["text"] for text in sub]
@@ -116,37 +95,46 @@ def evaluation(model_path: str, k_values: list[int] = [10, 50]):
     print(mrr)
 
 
-#
+model_dir = "/data2/local_datasets/encoder/model"
+
+print("### 테스트 데이터셋 : GPT ###")
+
+## 파인튜닝 이전 ##
 print("<< 파인튜닝 이전 >>")
 evaluation(
     "dragonkue/bge-m3-ko",
 )
 
+
+## 파인튜닝 이후 ##
 print("<< 파인튜닝 이후 >>")
 
 # BGE-M3
+print("# BGE-M3 #")
 evaluation(
-    "/data2/local_datasets/encoder/bgem3/ft_5ep",
+    f"{model_dir}/bgem3/ft_5ep",
 )
 
 evaluation(
-    "/data2/local_datasets/encoder/bgem3/ft_10ep",
+    f"{model_dir}/bgem3/ft_10ep",
 )
 
-# Custom bge-m3 version 3
+# BGE-M3 SAQ
+print("# SAQ #")
 evaluation(
-    "/data2/local_datasets/encoder/bgem3_custom/ft_5ep_v3",
-)
-
-evaluation(
-    "/data2/local_datasets/encoder/bgem3_custom/ft_10ep_v3",
-)
-
-# Custom bge-m3 version 4
-evaluation(
-    "/data2/local_datasets/encoder/bgem3_custom/ft_5ep_v4",
+    f"{model_dir}/bgem3saq/ft_5ep",
 )
 
 evaluation(
-    "/data2/local_datasets/encoder/bgem3_custom/ft_10ep_v4",
+    f"{model_dir}/bgem3saq/ft_10ep",
+)
+
+# BGE-M3 Ctrl
+print("# Ctrl #")
+evaluation(
+    f"{model_dir}/bgem3ctrl/ft_5ep",
+)
+
+evaluation(
+    f"{model_dir}/bgem3ctrl/ft_5ep",
 )

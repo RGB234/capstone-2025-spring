@@ -8,4 +8,4 @@
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
 
-python evaluation.py
+python evaluation_klaid.py
