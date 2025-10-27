@@ -13,28 +13,26 @@ pwd
 # modified from https://github.com/FlagOpen/FlagEmbedding/blob/master/Tutorials/7_Fine-tuning/7.1.2_Fine-tune.ipynb
 torchrun --nproc_per_node 1 \
 --master_port 22334 \
--m bgem3wae \
+-m bgem3ctrl \
     --model_name_or_path dragonkue/bge-m3-ko \
-    --cache_dir /data2/local_datasets/encoder/cache/bgem3_custom/10ep_wae/model \
-    --cache_path /data2/local_datasets/encoder/cache/bgem3_custom/10ep_wae/data \
-    --train_data /data2/local_datasets/encoder/data/relevant_incidents_train_minedHN.jsonl \
-    --save_steps 500 \
-    --logging_steps 100 \
-    --num_train_epochs 10 \
+    --cache_dir /data2/local_datasets/encoder/cache/5ep/ctrl/model \
+    --cache_path /data2/local_datasets/encoder/cache/5ep/ctrl/data \
+    --train_data /data2/local_datasets/encoder/data/incidents_train_minedHN.jsonl \
+    --output_dir /data2/local_datasets/encoder/output/5ep/ctrl \
+    --save_steps 1000 \
+    --logging_steps 200 \
+    --num_train_epochs 5 \
     --dataloader_drop_last True \
-    --output_dir /data2/local_datasets/encoder/bgem3_custom/10ep_wae \
     --unified_finetuning True \
     --learning_rate 1e-5 \
     --fp16 \
     --pad_to_multiple_of 8 \
-    --per_device_train_batch_size 1 \
+    --per_device_train_batch_size 2 \
     --normalize_embeddings True \
     --temperature 0.02 \
     --query_max_len 512 \
     --passage_max_len 512 \
-    --train_group_size 2 \
+    --train_group_size 8 \
     --negatives_cross_device \
     --seed 42 \
     --data_seed 42 \
-    
-    
