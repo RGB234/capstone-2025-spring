@@ -100,9 +100,11 @@ def evaluation(model_path: str, k_values: list[int] = [10, 50]):
 
 model_dir = "/data2/local_datasets/encoder/output"
 
+print("\n###########################")
 print("### 테스트 데이터셋 : KLAID ###")
 
 ## 파인튜닝 이전 ##
+print("\n###########################")
 print("<< 파인튜닝 이전 >>")
 evaluation(
     "dragonkue/bge-m3-ko",
@@ -110,9 +112,11 @@ evaluation(
 
 
 ## 파인튜닝 이후 ##
+print("\n###########################")
 print("<< 파인튜닝 이후 >>")
 
 # BGE-M3
+print("\n###########################")
 print("# BGE-M3 #")
 evaluation(
     f"{model_dir}/5ep/bgem3",
@@ -123,6 +127,7 @@ evaluation(
 )
 
 # BGE-M3 SAQ
+print("\n###########################")
 print("# SAQ #")
 evaluation(
     f"{model_dir}/5ep/saq",
@@ -133,6 +138,7 @@ evaluation(
 )
 
 # BGE-M3 Ctrl
+print("\n###########################")
 print("# Ctrl #")
 evaluation(
     f"{model_dir}/5ep/ctrl",
