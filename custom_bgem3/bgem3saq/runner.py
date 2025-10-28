@@ -29,7 +29,7 @@ from dataclasses import asdict, fields
 
 # from .modeling import EncoderOnlyEmbedderM3Model
 from .modeling import (
-    BGEM3SaqeModel,
+    BGEM3SaqModel,
     SentenceAttentionModule,
 )
 from .trainer import EncoderOnlyEmbedderM3Trainer
@@ -248,7 +248,7 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
         logger.info("Config: %s", config)
 
         # model = EncoderOnlyEmbedderM3Model(
-        model = BGEM3SaqeModel(
+        model = BGEM3SaqModel(
             self.get_model(
                 self.model_args.model_name_or_path,
                 self.model_args.trust_remote_code,

@@ -13,7 +13,7 @@ from transformers import HfArgumentParser
 # )
 
 
-from bgem3saqe import (
+from bgem3saq import (
     EncoderOnlyEmbedderM3DataArguments,
     EncoderOnlyEmbedderM3TrainingArguments,
     EncoderOnlyEmbedderM3ModelArguments,

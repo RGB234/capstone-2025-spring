@@ -15,7 +15,7 @@ from .arguments import (
 )
 
 # from .modeling import EncoderOnlyEmbedderM3Model, EncoderOnlyEmbedderM3ModelForInference
-from .modeling import BGEM3SaqeModel, BGEM3SaqeModelForInference
+from .modeling import BGEM3SaqModel, BGEM3SaqModelForInference
 
 from .trainer import EncoderOnlyEmbedderM3Trainer
 from .runner import EncoderOnlyEmbedderM3Runner
@@ -25,8 +25,8 @@ __all__ = [
     "EncoderOnlyEmbedderM3ModelArguments",
     "EncoderOnlyEmbedderM3DataArguments",
     "EncoderOnlyEmbedderM3TrainingArguments",
-    "BGEM3SaqeModel",
-    "BGEM3SaqeModelForInference",
+    "BGEM3SaqModel",
+    "BGEM3SaqModelForInference",
     "EncoderOnlyEmbedderM3Trainer",
     "EncoderOnlyEmbedderM3Runner",
 ]
