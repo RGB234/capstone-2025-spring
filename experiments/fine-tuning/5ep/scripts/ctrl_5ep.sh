@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-gpu=6
 #SBATCH --mem-per-gpu=32G
-#SBATCH -w aurora-g7
+#SBATCH -w aurora-g8
 #SBATCH -p batch_ugrad
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
@@ -17,7 +17,7 @@ torchrun --nproc_per_node 1 \
     --model_name_or_path dragonkue/bge-m3-ko \
     --cache_dir /data2/local_datasets/encoder/cache/5ep/ctrl/model \
     --cache_path /data2/local_datasets/encoder/cache/5ep/ctrl/data \
-    --train_data /data2/local_datasets/encoder/data/incidents_train_minedHN.jsonl \
+    --train_data /data2/local_datasets/encoder/dataset/incidents_ft_minedHN.jsonl \
     --output_dir /data2/local_datasets/encoder/output/5ep/ctrl \
     --save_steps 1000 \
     --logging_steps 200 \

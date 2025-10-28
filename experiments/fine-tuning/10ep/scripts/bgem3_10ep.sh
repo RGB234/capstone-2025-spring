@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-gpu=6
 #SBATCH --mem-per-gpu=32G
-#SBATCH -w aurora-g7
+#SBATCH -w aurora-g8
 #SBATCH -p batch_ugrad
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
@@ -17,7 +17,7 @@ model_args="\
 "
 
 data_args="\
-    --train_data /data2/local_datasets/encoder/data/incidents_train_minedHN.jsonl \
+    --train_data /data2/local_datasets/encoder/dataset/incidents_ft_minedHN.jsonl \
     --cache_path /data2/local_datasets/encoder/cache/10ep/bgem3/data \
     --train_group_size 8 \
     --query_max_len 512 \
@@ -27,7 +27,7 @@ data_args="\
 "
 
 training_args="\
-    --output_dir /data2/local_datasets/encoder/output/10ep/bgem3 \ 
+    --output_dir /data2/local_datasets/encoder/output/10ep/bgem3 \
     --num_train_epochs 10 \
     --save_steps 1000 \
     --logging_steps 200 \
