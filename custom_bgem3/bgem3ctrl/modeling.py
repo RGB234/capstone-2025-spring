@@ -36,10 +36,10 @@ class MultiHeadAttention(nn.Module):
         self.out_dense = nn.Linear(d_model, d_model)
 
     def split_heads(self, x):
-        # (batch_size, d_model) → (batch_size, num_heads, depth)
+        # (batch_size, seq_len, d_model) → (batch_size, seq_len, num_heads, depth)
         batch_size = x.size(0)
-        x = x.view(batch_size, self.num_heads, self.depth)
-        return x.transpose(0, 1)  # (num_heads, batch_size, depth)
+        x = x.view(batch_size, -1, self.num_heads, self.depth)
+        return x.transpose(1, 2)  # (batch_size, num_heads, seq_len, depth)
 
     def scaled_dot_product(self, query, key, value):
         dk = query.size(-1)
@@ -49,27 +49,30 @@ class MultiHeadAttention(nn.Module):
         return output, weights
 
     def forward(self, query, key, value) -> torch.Tensor:
-        # Input: (batch_size, d_model)
+        batch_size = query.size(0)
+        # Input: (batch_size, seq_len, d_model)
         query = self.query_dense(query)
         key = self.key_dense(key)
         value = self.value_dense(value)
 
+        # (batch_size, num_heads, seq_len, d_model/num_heads)
         query = self.split_heads(query)
         key = self.split_heads(key)
         value = self.split_heads(value)
 
         scaled_attention, _ = self.scaled_dot_product(query, key, value)
 
-        # (num_heads, batch_size, depth) → (batch_size, num_heads, depth)
-        scaled_attention = scaled_attention.transpose(0, 1)
-        concat_attention = scaled_attention.reshape(-1, self.d_model)
+        # (batch_size, num_heads, seq_len, d_model/num_heads) → (batch_size, seq_len, num_heads, d_model/num_heads)
+        scaled_attention = scaled_attention.transpose(1, 2)
+        # (batch_size, seq_len, num_heads, d_model/num_heads) -> (batch_size, seq_len, d_model)
+        concat_attention = scaled_attention.reshape(batch_size, -1, self.d_model)
 
         output = self.out_dense(concat_attention)
         return output
 
 
 # BERT Embedding layer
-class AttentionLayer(nn.Module):
+class BERTLayer(nn.Module):
     """
     Args :
       dff : feedforward_size
@@ -78,7 +81,7 @@ class AttentionLayer(nn.Module):
       dropout : dropout rate
 
     Returns:
-      sentence_attention_embedding : (batch_size, d_model)
+      sentence_attention_embedding : (batch_size, seq_len, d_model)
     """
 
     def __init__(self, dff, d_model, num_heads, dropout):
@@ -107,14 +110,14 @@ class AttentionLayer(nn.Module):
         return out2
 
 
-# custom module
-class SentenceAttentionModule(nn.Module):
+# BERT
+class BERTModule(nn.Module):
     def __init__(self, dff, d_model, num_heads, dropout):
         super().__init__()
         self.num_layers = 8
         self.layers = nn.ModuleList(
             [
-                AttentionLayer(dff, d_model, num_heads, dropout)
+                BERTLayer(dff, d_model, num_heads, dropout)
                 for _ in range(self.num_layers)
             ]
         )
@@ -214,7 +217,7 @@ class BGEM3CtrlModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module
             torch.Tensor: The dense embeddings.
         """
         if self.sentence_pooling_method == "cls":
-            return last_hidden_state[:, 0]
+            return last_hidden_state[:, 0] # (batch_size, hidden_size)
         elif self.sentence_pooling_method == "mean":
             s = torch.sum(
                 last_hidden_state * attention_mask.unsqueeze(-1).float(), dim=1
@@ -324,6 +327,7 @@ class BGEM3CtrlModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module
         # )  # (batch_size, hidden_size)
         # sentence_attention_embedding = self.sentence_attention_module(dense_embedding)
 
+        # last_hidden_state : (batch_size, seq_len, hidden_size)
         bert_last_hidden_state = self.sentence_attention_module(last_hidden_state)
         # "cls" token
         return bert_last_hidden_state[:, 0]
@@ -873,7 +877,7 @@ class BGEM3CtrlModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module
             )
 
 
-class BGEM3SaeModelForInference(BGEM3SaeModel):
+class BGEM3CtrlModelForInference(BGEM3CtrlModel):
     """
     Inference class of M3 model.
     """

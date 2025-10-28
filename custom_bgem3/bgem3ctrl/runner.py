@@ -19,8 +19,8 @@ from FlagEmbedding.abc.finetune.embedder import (
 
 # from .modeling import EncoderOnlyEmbedderM3Model
 from .modeling import (
-    BGEM3SaeModel,
-    SentenceAttentionModule,
+    BGEM3CtrlModel,
+    BERTModule,
 )
 from .trainer import EncoderOnlyEmbedderM3Trainer
 from .arguments import (
@@ -115,7 +115,7 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             in_features=model.config.hidden_size, out_features=1
         )
         #
-        sentence_attention_module = SentenceAttentionModule(
+        sentence_attention_module = BERTModule(
             dff=model.config.intermediate_size,
             d_model=model.config.hidden_size,
             num_heads=model.config.num_attention_heads,
@@ -194,7 +194,7 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
         logger.info("Config: %s", config)
 
         # model = EncoderOnlyEmbedderM3Model(
-        model = BGEM3SaeModel(
+        model = BGEM3CtrlModel(
             self.get_model(
                 self.model_args.model_name_or_path,
                 self.model_args.trust_remote_code,
