@@ -178,6 +178,11 @@ class BGEM3CtrlModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module
             sub_batch_size=sub_batch_size,
             kd_loss_type=kd_loss_type,
         )
+        # a list of of tensor names to ignore when saving the model
+        # (useful for keys that aren't trained, but which are deterministic)
+        # reference : https://huggingface.co/transformers/v4.3.3/_modules/transformers/modeling_utils.html PreTrainedModel
+        self._keys_to_ignore_on_save = None
+        
         self.sentence_pooling_method = sentence_pooling_method
         self.normalize_embeddings = normalize_embeddings
         self.cross_entropy = torch.nn.CrossEntropyLoss(reduction="mean")
@@ -661,7 +666,8 @@ class BGEM3CtrlModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module
             self.encode(passages)
         )  # (batch_size * group_size, dim)
 
-        if self.training:
+        # To include eval_loss in evaluation metrics
+        if self.training or self.model_eval:
             if teacher_scores is not None:
                 teacher_scores = torch.tensor(
                     teacher_scores, device=q_dense_vecs.device
@@ -857,22 +863,32 @@ class BGEM3CtrlModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module
             )
             return state_dict
 
+        def _trans_state_dict_append_prefix(state_dict, prefix:str):
+            # Add prefix "model" to state_dict keys for consistency between saving and loading.
+            state_dict = type(state_dict)(
+                {
+                    (f"{prefix}.{k}" if not k.startswith(f"{prefix}.") else k): v.clone().cpu()
+                    for k, v in state_dict.items()
+                }
+            )
+            return state_dict
+
         self.model.save_pretrained(
-            output_dir, state_dict=_trans_state_dict(self.model.state_dict())
+            output_dir, state_dict=_trans_state_dict_append_prefix(self.model.state_dict(), "model")
         )
 
         if self.unified_finetuning:
             torch.save(
-                _trans_state_dict(self.colbert_linear.state_dict()),
+                _trans_state_dict_append_prefix(self.colbert_linear.state_dict(), "colbert_linear"),
                 os.path.join(output_dir, "colbert_linear.pt"),
             )
             torch.save(
-                _trans_state_dict(self.sparse_linear.state_dict()),
+                _trans_state_dict_append_prefix(self.sparse_linear.state_dict(), "sparse_linear"),
                 os.path.join(output_dir, "sparse_linear.pt"),
             )
             #
             torch.save(
-                _trans_state_dict(self.sentence_attention_module.state_dict()),
+                _trans_state_dict_append_prefix(self.sentence_attention_module.state_dict(), "sentence_attention_module"),
                 os.path.join(output_dir, "sentence_attention_module.pt"),
             )
 

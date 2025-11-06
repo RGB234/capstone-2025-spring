@@ -10,20 +10,12 @@ import logging
 import datasets
 import numpy as np
 import torch.distributed as dist
-from dataclasses import dataclass
 from torch.utils.data import Dataset
 from transformers import (
-    PreTrainedTokenizer,
-    DataCollatorWithPadding,
-    TrainerCallback,
-    TrainerState,
-    TrainerControl,
+    PreTrainedTokenizer
 )
 
 # from .AbsArguments import AbsEmbedderDataArguments, AbsEmbedderTrainingArguments
-from FlagEmbedding.abc.finetune.embedder.AbsArguments import (
-    AbsEmbedderTrainingArguments,
-)
 from .arguments import EncoderOnlyEmbedderM3DataArguments
 
 logger = logging.getLogger(__name__)

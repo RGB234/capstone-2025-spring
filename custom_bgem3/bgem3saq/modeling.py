@@ -817,11 +817,9 @@ class BGEM3SaqModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module)
                     loss = loss / 2
             self.step += 1
         else:
+            logger.warning("model.model_eval : %s",self.model_eval)
+            logger.warning("model.training : %s", self.training)
             loss = None
-
-        # debugging
-        # if not self.training and self.model_eval:
-        #     logger.info(EmbedderOutput(loss=loss).loss)
 
         return EmbedderOutput(
             loss=loss,
@@ -863,23 +861,33 @@ class BGEM3SaqModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module)
                 {k: v.clone().cpu() for k, v in state_dict.items()}
             )
             return state_dict
+        
+        def _trans_state_dict_append_prefix(state_dict, prefix:str):
+            # Add prefix "model" to state_dict keys for consistency between saving and loading.
+            state_dict = type(state_dict)(
+                {
+                    (f"{prefix}.{k}" if not k.startswith(f"{prefix}.") else k): v.clone().cpu()
+                    for k, v in state_dict.items()
+                }
+            )
+            return state_dict
 
         self.model.save_pretrained(
-            output_dir, state_dict=_trans_state_dict(self.model.state_dict())
+            output_dir, state_dict=_trans_state_dict_append_prefix(self.model.state_dict(), "model")
         )
 
         if self.unified_finetuning:
             torch.save(
-                _trans_state_dict(self.colbert_linear.state_dict()),
+                _trans_state_dict_append_prefix(self.colbert_linear.state_dict(), "colbert_linear"), # colbert_linear
                 os.path.join(output_dir, "colbert_linear.pt"),
             )
             torch.save(
-                _trans_state_dict(self.sparse_linear.state_dict()),
+                _trans_state_dict_append_prefix(self.sparse_linear.state_dict(), "sparse_linear"), # sparse_linear
                 os.path.join(output_dir, "sparse_linear.pt"),
             )
             #
             torch.save(
-                _trans_state_dict(self.sentence_attention_module.state_dict()),
+                _trans_state_dict_append_prefix(self.sentence_attention_module.state_dict(), "sentence_attention_module"),
                 os.path.join(output_dir, "sentence_attention_module.pt"),
             )
 

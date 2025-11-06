@@ -4,7 +4,7 @@ https://github.com/FlagOpen/FlagEmbedding/blob/master/FlagEmbedding/finetune/emb
 """
 
 from dataclasses import dataclass, field
-from typing import Union
+from typing import Union, Optional, List
 
 from FlagEmbedding.abc.finetune.embedder import (
     AbsEmbedderTrainingArguments,
@@ -41,14 +41,31 @@ class EncoderOnlyEmbedderM3TrainingArguments(AbsEmbedderTrainingArguments):
     self_distill_start_step: int = field(
         default=-1, metadata={"help": "Num of step when using self-distill"}
     )
+    # Early stopping
+    load_best_model_at_end: bool = field(
+        default=True,
+    )
+    evaluation_strategy: str = field(
+        default="epoch",
+    )
+    save_strategy: str = field(
+        default="epoch"
+    )
+    metric_for_best_model: str = field(
+        default="loss"
+    )
+    greater_is_better: bool = field(
+        default=True,
+    )
 
 
 @dataclass
 class EncoderOnlyEmbedderM3DataArguments(AbsEmbedderDataArguments):
-    eval_data: str = field(
+    eval_data: Optional[List[str]] = field(
         default=None,
         metadata={
-            "help": "eval_dataset argument of transformers.Trainer. One or more paths to training data. `query: str`, `pos: List[str]`, `neg: List[str]` are required in the training data.",
+            "help": "eval_dataset argument of transformers.Trainer. One or more paths to validating data.",
+            # "help": "eval_dataset argument of transformers.Trainer. One or more paths to training data. `query: str`, `pos: List[str]`, `neg: List[str]` are required in the training data.",
             "nargs": "+",
         },
     )

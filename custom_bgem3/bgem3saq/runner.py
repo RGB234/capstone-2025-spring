@@ -21,11 +21,8 @@ from huggingface_hub import snapshot_download
 from FlagEmbedding.abc.finetune.embedder import (
     AbsEmbedderRunner,
     AbsEmbedderModel,
-    AbsEmbedderDataArguments,
     EmbedderTrainerCallbackForDataRefresh,
 )
-
-from dataclasses import asdict, fields
 
 # from .modeling import EncoderOnlyEmbedderM3Model
 from .modeling import (
@@ -33,37 +30,19 @@ from .modeling import (
     SentenceAttentionModule,
 )
 from .trainer import EncoderOnlyEmbedderM3Trainer
-from .dataset import EmbedderEvalDataset
 from .arguments import (
     EncoderOnlyEmbedderM3ModelArguments,
     EncoderOnlyEmbedderM3TrainingArguments,
     #
     EncoderOnlyEmbedderM3DataArguments,
 )
-
-
-###
-from transformers import TrainerCallback, EarlyStoppingCallback, EvalPrediction
+#
+from .dataset import (
+    EmbedderEvalDataset
+)
+from transformers import EarlyStoppingCallback
 
 logger = logging.getLogger(__name__)
-
-
-#
-class WeightChangeTrackerCallback(TrainerCallback):
-    def __init__(self, layer_name="sentence_attention_module.layers.5.norm2.weight"):
-        self.layer_name = layer_name
-        self.prev_weights = None
-
-    def on_epoch_end(self, args, state, control, model=None, **kwargs):
-        with torch.no_grad():
-            weight = dict(model.named_parameters())[self.layer_name].clone().cpu()
-            if self.prev_weights is not None:
-                delta = torch.norm(weight - self.prev_weights).item()
-                print(
-                    f"[Step {state.global_step}] {self.layer_name} changed by {delta:.6f}"
-                )
-
-            self.prev_weights = weight
 
 
 class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
@@ -119,6 +98,8 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
 
         self.tokenizer, self.model = self.load_tokenizer_and_model()
         self.train_dataset = self.load_train_dataset()
+        #
+        self.eval_dataset = self.load_eval_dataset()
         self.data_collator = self.load_data_collator()
         self.trainer = self.load_trainer()
 
@@ -220,6 +201,31 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
             "sentence_attention_module": sentence_attention_module,
         }
 
+    #
+    def load_eval_dataset(self) -> EmbedderEvalDataset:
+        """Loads the validation dataset based on data arguments.
+
+        Returns:
+            AbsEmbedderTrainDataset: The loaded dataset instance.
+        """
+        if self.data_args.same_dataset_within_batch:
+            validation_dataset = EmbedderEvalDataset(
+                args=self.data_args,
+                default_batch_size=self.training_args.per_device_train_batch_size,
+                seed=self.training_args.seed,
+                tokenizer=self.tokenizer,
+                process_index=self.training_args.process_index,
+                num_processes=self.training_args.world_size
+            )
+            self.training_args.per_device_train_batch_size = 1
+            self.training_args.dataloader_num_workers = 0   # avoid multi-processing
+        else:
+            validation_dataset = EmbedderEvalDataset(
+                args=self.data_args,
+                tokenizer=self.tokenizer
+            )
+        return validation_dataset
+
     def load_tokenizer_and_model(self) -> Tuple[PreTrainedTokenizer, AbsEmbedderModel]:
         """Load the tokenizer and model.
 
@@ -277,7 +283,7 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
 
         if self.training_args.fix_encoder:
             for k, v in model.named_parameters():
-                # if "colbert_linear" in k or 1"sparse_linear" in k :
+                # if "colbert_linear" in k or "sparse_linear" in k :
                 if (
                     "colbert_linear" in k
                     or "sparse_linear" in k
@@ -289,6 +295,19 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
                     v.requires_grad = False
 
         return tokenizer, model
+    
+    def compute_metrics(self, eval_preds):
+        """
+            eval_pred : transformers.trainer_utils.EvalPrediction
+
+            metrics = self.compute_metrics(
+                EvalPrediction(predictions=all_preds, label_ids=all_labels, **eval_set_kwargs)
+            )
+        """
+        preds, labels = eval_preds
+        losses = preds # class 'numpy.ndarray'>
+        avg_loss = round(losses.mean(axis=0), 4)
+        return {"loss": avg_loss}
 
     def load_trainer(self) -> EncoderOnlyEmbedderM3Trainer:
         """Load the M3 trainer.
@@ -296,19 +315,31 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
         Returns:
             EncoderOnlyEmbedderM3Trainer: M3 Trainer instance.
         """
+
+        # early stopping 
+        early_stopping_callback = EarlyStoppingCallback(
+            early_stopping_patience=3,
+            early_stopping_threshold=0.0
+        )
+
         trainer = EncoderOnlyEmbedderM3Trainer(
             model=self.model,
             args=self.training_args,
             train_dataset=self.train_dataset,
+            #
+            eval_dataset=self.eval_dataset,
+            compute_metrics=self.compute_metrics,
             data_collator=self.data_collator,
             tokenizer=self.tokenizer,
+            #
+            callbacks=[early_stopping_callback]
         )
+
         if self.data_args.same_dataset_within_batch:
             trainer.add_callback(
-                EmbedderTrainerCallbackForDataRefresh(self.train_dataset)
+                EmbedderTrainerCallbackForDataRefresh(self.train_dataset),
             )
-        #
-        # trainer.add_callback(WeightChangeTrackerCallback())
+
         return trainer
 
     def run(self):
@@ -317,18 +348,12 @@ class EncoderOnlyEmbedderM3Runner(AbsEmbedderRunner):
         """
         Path(self.training_args.output_dir).mkdir(parents=True, exist_ok=True)
 
-        # logger.info("##### Model stete dict  #####\n")
-        # logger.info(self.model.state_dict)
+        # debugging
+        # for k in self.model.state_dict().keys():
+        #     print(k)
 
-        # Training
         self.trainer.train(
             resume_from_checkpoint=self.training_args.resume_from_checkpoint
         )
-
-        # logger.info("##### Trainer.stete.best_model_checkpoint #####")
-        # logger.info(self.trainer.state.best_model_checkpoint)
-
-        # logger.info("##### Trainer.stete #####")
-        # logger.info(self.trainer.state)
 
         self.trainer.save_model()

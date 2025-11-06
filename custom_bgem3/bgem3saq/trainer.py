@@ -8,14 +8,21 @@ import torch
 from torch import nn
 import logging
 from typing import Optional, Any, Union
+from torch.utils.data import DataLoader, Dataset
+from functools import partial
+from collections.abc import Callable
 
 # from transformers.utils import is_sagemaker_mp_enabled
-from transformers.trainer_pt_utils import (
-    nested_detach,
-    # smp_forward_only,
-    # smp_nested_concat,
+from transformers.utils import (
+    is_datasets_available,
+)
+from transformers.trainer_utils import(
+    seed_worker,
 )
 from FlagEmbedding.abc.finetune.embedder import AbsEmbedderTrainer
+
+if is_datasets_available():
+    import datasets
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +64,8 @@ class EncoderOnlyEmbedderM3Trainer(AbsEmbedderTrainer):
         #                                         pooling_mode=self.args.sentence_pooling_method,
         #                                         normlized=self.args.normlized)
 
-    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+    # FlagEmbedding.abc.finetune.embedder.AbsEmbedderTrainer
+    def compute_loss(self, model, inputs, return_outputs=False):
         """
         How the loss is computed by Trainer. By default, all models return the loss in the first element.
 
@@ -74,11 +82,20 @@ class EncoderOnlyEmbedderM3Trainer(AbsEmbedderTrainer):
                 also returns the model's outputs in a tuple ``(loss, outputs)``.
         """
 
-        outputs = model(**inputs)
+        """
+        inputs:
+            queries: Union[Dict[str, Tensor], List[Dict[str, Tensor]]] = None,
+            passages: Union[Dict[str, Tensor], List[Dict[str, Tensor]]] = None,
+            teacher_scores: Union[None, List[float]] = None,
+            no_in_batch_neg_flag: bool = False,
+        """
+        outputs = model(**inputs) # model.forward(**inputs)
         loss = outputs.loss
 
         return (loss, outputs) if return_outputs else loss
 
+    # override
+    # transformers.trainer
     def prediction_step(
         self,
         model: nn.Module,
@@ -109,74 +126,125 @@ class EncoderOnlyEmbedderM3Trainer(AbsEmbedderTrainer):
             Tuple[Optional[torch.Tensor], Optional[torch.Tensor], Optional[torch.Tensor]]: A tuple with the loss,
             logits and labels (each being optional).
         """
-        has_labels = (
-            False
-            if len(self.label_names) == 0
-            else all(inputs.get(k) is not None for k in self.label_names)
-        )
-        # For CLIP-like models capable of returning loss values.
-        # If `return_loss` is not specified or being `None` in `inputs`, we check if the default value of `return_loss`
-        # is `True` in `model.forward`.
-        return_loss = inputs.get("return_loss", None)
-        if return_loss is None:
-            return_loss = self.can_return_loss
-        loss_without_labels = (
-            True if len(self.label_names) == 0 and return_loss else False
+        model.model_eval = True
+        loss, outputs = self.compute_loss(model, inputs, return_outputs=True)
+        model.model_eval = False
+        logits = loss # Make `compute_metrics` receive `eval_loss` instead of `eval_pred`, which is currently `None`.
+
+        """
+            def evaluation_loop(
+                self,
+                dataloader: DataLoader,
+                description: str,
+                prediction_loss_only: Optional[bool] = None,
+                ignore_keys: Optional[list[str]] = None,
+                metric_key_prefix: str = "eval",
+            ) -> EvalLoopOutput:
+
+            ...
+
+            losses, logits, labels = self.prediction_step(model, inputs, prediction_loss_only, ignore_keys=ignore_keys)
+            
+            ...
+
+            if logits is not None:
+                logits = self.accelerator.pad_across_processes(logits, dim=1, pad_index=-100)
+                if self.preprocess_logits_for_metrics is not None:
+                    logits = self.preprocess_logits_for_metrics(logits, labels)
+                logits = self.gather_function(logits)
+                if not self.args.batch_eval_metrics or description == "Prediction":
+                    all_preds.add(logits)
+
+            ...
+
+            metrics = self.compute_metrics(
+                EvalPrediction(predictions=all_preds, label_ids=all_labels, **eval_set_kwargs)
+            )
+        """
+        return (loss, logits, torch.zeros(1)) # loss, logits, labels(dummy)
+    
+    def get_eval_dataloader(self, eval_dataset: Optional[Union[str, Dataset]] = None) -> DataLoader:
+        """
+        Returns the evaluation [`~torch.utils.data.DataLoader`].
+
+        Subclass and override this method if you want to inject some custom behavior.
+
+        Args:
+            eval_dataset (`str` or `torch.utils.data.Dataset`, *optional*):
+                If a `str`, will use `self.eval_dataset[eval_dataset]` as the evaluation dataset. If a `Dataset`, will override `self.eval_dataset` and must implement `__len__`. If it is a [`~datasets.Dataset`], columns not accepted by the `model.forward()` method are automatically removed.
+        """
+        if eval_dataset is None and self.eval_dataset is None:
+            raise ValueError("Trainer: evaluation requires an eval_dataset.")
+
+        # If we have persistent workers, don't do a fork bomb especially as eval datasets
+        # don't change during training
+        dataloader_key = eval_dataset if isinstance(eval_dataset, str) else "eval"
+        if (
+            hasattr(self, "_eval_dataloaders")
+            and dataloader_key in self._eval_dataloaders
+            and self.args.dataloader_persistent_workers
+        ):
+            return self._eval_dataloaders[dataloader_key]
+
+        eval_dataset = (
+            self.eval_dataset[eval_dataset]
+            if isinstance(eval_dataset, str)
+            else eval_dataset
+            if eval_dataset is not None
+            else self.eval_dataset
         )
 
-        inputs = self._prepare_inputs(inputs)
-        if ignore_keys is None:
-            if hasattr(self.model, "config"):
-                ignore_keys = getattr(
-                    self.model.config,
-                    "keys_to_ignore_at_inference",
-                    ["past_key_values"],
-                )
-            else:
-                ignore_keys = []
+        return self._get_dataloader(
+            dataset=eval_dataset,
+            description="Evaluation",
+            batch_size=self.args.eval_batch_size,
+            sampler_fn=self._get_eval_sampler,
+            dataloader_key=dataloader_key,
+        )
+    
+    def _get_dataloader(
+        self,
+        dataset: Dataset,
+        description: str,
+        batch_size: int,
+        sampler_fn: Optional[Callable[[Dataset], torch.utils.data.Sampler]] = None,
+        is_training: bool = False,
+        dataloader_key: Optional[str] = None,
+    ) -> DataLoader:
+        """Create a [`~torch.utils.data.DataLoader`] from the given dataset."""
 
-        # labels may be popped when computing the loss (label smoothing for instance) so we grab them first.
-        if has_labels or loss_without_labels:
-            labels = nested_detach(tuple(inputs.get(name) for name in self.label_names))
-            if len(labels) == 1:
-                labels = labels[0]
+        data_collator = self.data_collator
+        if is_datasets_available() and isinstance(dataset, datasets.Dataset):
+            dataset = self._remove_unused_columns(dataset, description=description)
         else:
-            labels = None
+            data_collator = self._get_collator_with_removed_columns(self.data_collator, description=description)
 
-        with torch.no_grad():
-            if has_labels or loss_without_labels:
-                with self.compute_loss_context_manager():
-                    loss, outputs = self.compute_loss(
-                        model, inputs, return_outputs=True
-                    )
-                loss = loss.detach().mean()
+        dataloader_params = {
+            "batch_size": batch_size,
+            "collate_fn": data_collator,
+            "num_workers": self.args.dataloader_num_workers,
+            "pin_memory": self.args.dataloader_pin_memory,
+            "persistent_workers": self.args.dataloader_persistent_workers,
+        }
 
-                if isinstance(outputs, dict):
-                    logits = tuple(
-                        v for k, v in outputs.items() if k not in ignore_keys + ["loss"]
-                    )
-                else:
-                    logits = outputs[1:]
+        if not isinstance(dataset, torch.utils.data.IterableDataset):
+            if sampler_fn is not None:
+                dataloader_params["sampler"] = sampler_fn(dataset)
+            dataloader_params["drop_last"] = self.args.dataloader_drop_last
+            dataloader_params["prefetch_factor"] = self.args.dataloader_prefetch_factor
+            if is_training:
+                dataloader_params["worker_init_fn"] = partial(
+                    seed_worker, num_workers=self.args.dataloader_num_workers, rank=self.args.process_index
+                )
+
+        dataloader = self.accelerator.prepare(DataLoader(dataset, **dataloader_params))
+
+        # Store the prepared dataloader for subsequent evaluations if using persistent workers.
+        if dataloader_key is not None and self.args.dataloader_persistent_workers:
+            if hasattr(self, "_eval_dataloaders"):
+                self._eval_dataloaders[dataloader_key] = dataloader
             else:
-                # loss = None
-                loss = self.compute_loss(model, inputs)
-                with self.compute_loss_context_manager():
-                    outputs = model(**inputs)
-                if isinstance(outputs, dict):
-                    logits = tuple(
-                        v for k, v in outputs.items() if k not in ignore_keys
-                    )
-                else:
-                    logits = outputs
-                # TODO: this needs to be fixed and made cleaner later.
-                if self.args.past_index >= 0:
-                    self._past = outputs[self.args.past_index - 1]
+                self._eval_dataloaders = {dataloader_key: dataloader}
 
-        if prediction_loss_only:
-            return (loss, None, None)
+        return dataloader
 
-        logits = nested_detach(logits)
-        if len(logits) == 1:
-            logits = logits[0]
-
-        return (loss, logits, labels)
