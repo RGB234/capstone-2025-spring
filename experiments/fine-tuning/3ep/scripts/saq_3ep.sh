@@ -15,13 +15,13 @@ torchrun --nproc_per_node 1 \
 --master_port 22334 \
 -m bgem3saq \
     --model_name_or_path dragonkue/bge-m3-ko \
-    --cache_dir /data2/local_datasets/encoder/cache/5ep/saq/model \
-    --cache_path /data2/local_datasets/encoder/cache/5ep/saq/data \
-    --train_data /data2/local_datasets/encoder/dataset/incidents_ft_minedHN.jsonl \
-    --output_dir /data2/local_datasets/encoder/output/5ep/saq \
+    --cache_dir /data2/local_datasets/encoder/cache/3ep/saq/model \
+    --cache_path /data2/local_datasets/encoder/cache/3ep/saq/data \
+    --train_data /data2/local_datasets/encoder/dataset/incidents_ft_minedHN_demo.jsonl \
+    --output_dir /data2/local_datasets/encoder/output/3ep/saq \
     --save_steps 1000 \
     --logging_steps 200 \
-    --num_train_epochs 5 \
+    --num_train_epochs 3 \
     --dataloader_drop_last True \
     --unified_finetuning True \
     --learning_rate 1e-5 \
@@ -36,3 +36,9 @@ torchrun --nproc_per_node 1 \
     --negatives_cross_device \
     --seed 42 \
     --data_seed 42 \
+    --load_best_model_at_end True \
+    --evaluation_strategy epoch \
+    --save_strategy epoch \
+    --metric_for_best_model loss \
+    --greater_is_better False \
+    --eval_data /data2/local_datasets/encoder/dataset/incidents_val_minedHN_demo.jsonl \

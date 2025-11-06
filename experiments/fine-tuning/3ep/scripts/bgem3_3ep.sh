@@ -10,25 +10,24 @@
 
 pwd
 
-
 model_args="\
     --model_name_or_path dragonkue/bge-m3-ko \
-    --cache_dir /data2/local_datasets/encoder/cache/5ep/bgem3/model \
+    --cache_dir /data2/local_datasets/encoder/cache/3ep/bgem3/model
 "
 
 data_args="\
-    --train_data /data2/local_datasets/encoder/dataset/incidents_ft_minedHN.jsonl \
-    --cache_path /data2/local_datasets/encoder/cache/5ep/bgem3/data \
+    --train_data /data2/local_datasets/encoder/dataset/incidents_ft_minedHN_demo.jsonl \
+    --cache_path /data2/local_datasets/encoder/cache/3ep/bgem3/data \
     --train_group_size 8 \
     --query_max_len 512 \
     --passage_max_len 512 \
     --pad_to_multiple_of 8 \
-    
+    --eval_data /data2/local_datasets/encoder/dataset/incidents_val_minedHN_demo.jsonl
 "
 
 training_args="\
-    --output_dir /data2/local_datasets/encoder/output/5ep/bgem3 \
-    --num_train_epochs 5 \
+    --output_dir /data2/local_datasets/encoder/output/3ep/bgem3 \
+    --num_train_epochs 3 \
     --save_steps 1000 \
     --logging_steps 200 \
     --seed 42 \
@@ -41,16 +40,19 @@ training_args="\
     --dataloader_drop_last True \
     --normalize_embeddings True \
     --negatives_cross_device \
+    --load_best_model_at_end True \
+    --evaluation_strategy epoch \
+    --save_strategy epoch \
+    --metric_for_best_model loss \
+    --greater_is_better False
 "
 num_gpus=1
 cmd="torchrun --nproc_per_node $num_gpus \
-    -m FlagEmbedding.finetune.embedder.encoder_only.m3 \
+    -m bgem3 \
     $model_args \
     $data_args \
     $training_args \
 "
-
-echo $cmd
 eval $cmd
 
 

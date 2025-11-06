@@ -11,26 +11,26 @@
 export PYTHONPATH=/data/fehs0611/repos/custom_encoder/custom_bgem3/
 
 # sh 실행
-echo "Running bgem3_5ep.sh..."
-bash ./scripts/bgem3_5ep.sh
+echo "Running bgem3_3ep.sh..."
+bash ./scripts/bgem3_3ep.sh
 if [ $? -ne 0 ]; then
-    echo "bgem3_5ep.sh failed. Exiting."
+    echo "bgem3_3ep.sh failed. Exiting."
     exit 1
 fi
 
 # sh 실행
-echo "Running ctrl_5ep.sh..."
-bash ./scripts/ctrl_5ep.sh
+echo "Running ctrl_3ep.sh..."
+bash ./scripts/ctrl_3ep.sh
 if [ $? -ne 0 ]; then
-    echo "ctrl_5ep.sh failed. Exiting."
+    echo "ctrl_3ep.sh failed. Exiting."
     exit 1
 fi
 
 # sh 실행
-echo "Running saq_5ep.sh..."
-bash ./scripts/saq_5ep.sh
+echo "Running saq_3ep.sh..."
+bash ./scripts/saq_3ep.sh
 if [ $? -ne 0 ]; then
-    echo "saq_5ep.sh failed. Exiting."
+    echo "saq_3ep.sh failed. Exiting."
     exit 1
 fi
 
