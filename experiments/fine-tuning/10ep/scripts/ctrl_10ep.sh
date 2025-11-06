@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-gpu=6
 #SBATCH --mem-per-gpu=32G
-#SBATCH -w aurora-g8
+#SBATCH -w aurora-g6
 #SBATCH -p batch_ugrad
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
@@ -36,3 +36,9 @@ torchrun --nproc_per_node 1 \
     --negatives_cross_device \
     --seed 42 \
     --data_seed 42 \
+    --load_best_model_at_end True \
+    --evaluation_strategy epoch \
+    --save_strategy epoch \
+    --metric_for_best_model loss \
+    --greater_is_better False \
+    --eval_data /data2/local_datasets/encoder/dataset/incidents_val_minedHN.jsonl \

@@ -3,7 +3,7 @@
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-gpu=6
 #SBATCH --mem-per-gpu=32G
-#SBATCH -w aurora-g8
+#SBATCH -w aurora-g6
 #SBATCH -p batch_ugrad
 #SBATCH -t 1-0
 #SBATCH -o logs/slurm-%A.out
@@ -23,7 +23,7 @@ data_args="\
     --query_max_len 512 \
     --passage_max_len 512 \
     --pad_to_multiple_of 8 \
-    
+    --eval_data /data2/local_datasets/encoder/dataset/incidents_val_minedHN.jsonl \
 "
 
 training_args="\
@@ -41,10 +41,15 @@ training_args="\
     --dataloader_drop_last True \
     --normalize_embeddings True \
     --negatives_cross_device \
+    --load_best_model_at_end True \
+    --evaluation_strategy epoch \
+    --save_strategy epoch \
+    --metric_for_best_model loss \
+    --greater_is_better False \
 "
 num_gpus=1
 cmd="torchrun --nproc_per_node $num_gpus \
-    -m FlagEmbedding.finetune.embedder.encoder_only.m3 \
+    -m bgem3 \
     $model_args \
     $data_args \
     $training_args \
