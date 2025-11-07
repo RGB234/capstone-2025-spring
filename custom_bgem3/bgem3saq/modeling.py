@@ -863,7 +863,7 @@ class BGEM3SaqModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module)
             return state_dict
         
         def _trans_state_dict_append_prefix(state_dict, prefix:str):
-            # Add prefix "model" to state_dict keys for consistency between saving and loading.
+            # Add a prefix to state_dict keys for consistency between saving and loading.
             state_dict = type(state_dict)(
                 {
                     (f"{prefix}.{k}" if not k.startswith(f"{prefix}.") else k): v.clone().cpu()
@@ -873,7 +873,7 @@ class BGEM3SaqModel(AbsEmbedderModel):  # class AbsEmbedderModel(ABC, nn.Module)
             return state_dict
 
         self.model.save_pretrained(
-            output_dir, state_dict=_trans_state_dict_append_prefix(self.model.state_dict(), "model")
+            output_dir, state_dict=_trans_state_dict(self.model.state_dict())
         )
 
         if self.unified_finetuning:
