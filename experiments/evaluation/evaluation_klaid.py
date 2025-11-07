@@ -118,9 +118,9 @@ print("<< 파인튜닝 이후 >>")
 # BGE-M3
 print("\n###########################")
 print("# BGE-M3 #")
-evaluation(
-    f"{model_dir}/5ep/bgem3",
-)
+# evaluation(
+#     f"{model_dir}/3ep/bgem3",
+# )
 
 evaluation(
     f"{model_dir}/10ep/bgem3",
@@ -129,9 +129,9 @@ evaluation(
 # BGE-M3 SAQ
 print("\n###########################")
 print("# SAQ #")
-evaluation(
-    f"{model_dir}/5ep/saq",
-)
+# evaluation(
+#     f"{model_dir}/3ep/saq",
+# )
 
 evaluation(
     f"{model_dir}/10ep/saq",
@@ -140,9 +140,9 @@ evaluation(
 # BGE-M3 Ctrl
 print("\n###########################")
 print("# Ctrl #")
-evaluation(
-    f"{model_dir}/5ep/ctrl",
-)
+# evaluation(
+#     f"{model_dir}/3ep/ctrl",
+# )
 
 evaluation(
     f"{model_dir}/10ep/ctrl",

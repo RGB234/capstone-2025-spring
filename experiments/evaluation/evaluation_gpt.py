@@ -5,7 +5,7 @@ from datasets import load_dataset
 
 dataset_dir = "/data2/local_datasets/encoder/dataset"
 
-GPT-based dataset
+# GPT-based dataset
 queries = load_dataset("json", data_files=f"{dataset_dir}/gpt_test_queries.jsonl")[
     "train"
 ]
